@@ -11,7 +11,7 @@
 
 ## 使用方式
 
-目前发布了window版本，现在已经升级1.6版，下载点击 [发布页面](https://github.com/falconwho/opencode-enhanced/releases)
+目前发布了window版本，现在已经升级1.7版，下载点击 [发布页面](https://github.com/falconwho/opencode-enhanced/releases)
 
 - 系统文件和配置参数独立，不影响现有OpenCode运行。
 - 免安装版，解压zip后直接打开里面的 opencode Enhanced.exe 即可使用

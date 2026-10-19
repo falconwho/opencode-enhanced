@@ -35,7 +35,7 @@ export interface Interface {
   readonly clear: (messageID: MessageID) => Effect.Effect<void>
   readonly systemPaths: () => Effect.Effect<Set<string>, FSUtil.Error>
   readonly system: () => Effect.Effect<string[], FSUtil.Error>
-  readonly tail: () => Effect.Effect<string[], FSUtil.Error>
+  readonly reminder: () => Effect.Effect<string[], FSUtil.Error>
   readonly find: (dir: string) => Effect.Effect<string | undefined, FSUtil.Error>
   readonly resolve: (
     messages: SessionV1.WithParts[],
@@ -169,40 +169,23 @@ const layer: Layer.Layer<
       ]
     })
 
-    // opencode-enhanced: tail reminders re-insert the project instructions and
-    // the long-term memory after the conversation history and before the newest
-    // messages. The volatile memory stays out of the cached prefix; the static
-    // instruction copy keeps the rules in recent context on long conversations.
-    const tail = Effect.fn("Instruction.tail")(function* () {
+    // opencode-enhanced: the reminder re-inserts the project instructions at
+    // explicit context thresholds. It is persisted by session/agents-reminder so
+    // the block stays in place instead of moving every turn.
+    const reminder = Effect.fn("Instruction.reminder")(function* () {
       const config = yield* cfg.get()
-      const result: string[] = []
+      if (config.experimental?.agents_tail_reminder === false) return []
 
-      if (config.experimental?.agents_tail_reminder !== false) {
-        const paths = yield* systemPaths()
-        const files = yield* Effect.forEach(Array.from(paths), read, { concurrency: 8 })
-        const instructions = Array.from(paths).flatMap((item, i) =>
-          files[i] ? [`Instructions from: ${item}\n<instructions>\n${files[i]}\n</instructions>`] : [],
-        )
-        if (instructions.length > 0) {
-          result.push(
-            `<system-reminder>\nThe following project instructions were provided earlier in this conversation and remain in effect. Keep following them:\n\n${instructions.join("\n\n")}\n</system-reminder>`,
-          )
-        }
-      }
+      const paths = yield* systemPaths()
+      const files = yield* Effect.forEach(Array.from(paths), read, { concurrency: 8 })
+      const instructions = Array.from(paths).flatMap((item, i) =>
+        files[i] ? [`Instructions from: ${item}\n<instructions>\n${files[i]}\n</instructions>`] : [],
+      )
+      if (instructions.length === 0) return []
 
-      if (config.experimental?.memory) {
-        const file = path.join(global.data, "memory", "MEMORY.md")
-        if (yield* fs.existsSafe(file)) {
-          const content = yield* read(file)
-          if (content?.trim()) {
-            result.push(
-              `<system-reminder>\nLong-term user memory from: ${file}\n<user-memory>\n${content.trim().slice(0, 8000)}\n</user-memory>\n</system-reminder>`,
-            )
-          }
-        }
-      }
-
-      return result
+      return [
+        `<system-reminder>\nThe following project instructions were provided earlier in this conversation and remain in effect. Keep following them:\n\n${instructions.join("\n\n")}\n</system-reminder>`,
+      ]
     })
 
     const find = Effect.fn("Instruction.find")(function* (dir: string) {
@@ -257,7 +240,7 @@ const layer: Layer.Layer<
       return results
     })
 
-    return Service.of({ clear, systemPaths, system, tail, find, resolve })
+    return Service.of({ clear, systemPaths, system, reminder, find, resolve })
   }),
 )
 

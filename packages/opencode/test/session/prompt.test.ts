@@ -32,6 +32,7 @@ import { MessageV2 } from "../../src/session/message-v2"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { SessionCompaction } from "../../src/session/compaction"
 import { SessionSummary } from "../../src/session/summary"
+import { AGENTS_REMINDER_METADATA_KEY } from "../../src/session/agents-reminder"
 import { Instruction } from "../../src/session/instruction"
 import { SessionProcessor } from "../../src/session/processor"
 import { SessionPrompt } from "../../src/session/prompt"
@@ -415,6 +416,37 @@ const seed = Effect.fn("test.seed")(function* (sessionID: SessionID, opts?: { fi
     text: "hi there",
   })
   return { user: msg, assistant }
+})
+
+const assistantWithTokens = Effect.fn("test.assistantWithTokens")(function* (
+  sessionID: SessionID,
+  parentID: MessageID,
+  used: number,
+) {
+  const session = yield* Session.Service
+  const msg: SessionV1.Assistant = {
+    id: MessageID.ascending(),
+    role: "assistant",
+    parentID,
+    sessionID,
+    mode: "build",
+    agent: "build",
+    cost: 0,
+    path: { cwd: "/tmp", root: "/tmp" },
+    tokens: { input: used, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    modelID: ref.modelID,
+    providerID: ref.providerID,
+    time: { created: Date.now() },
+  }
+  yield* session.updateMessage(msg)
+  yield* session.updatePart({
+    id: PartID.ascending(),
+    messageID: msg.id,
+    sessionID,
+    type: "text",
+    text: "previous answer",
+  })
+  return msg
 })
 
 const addSubtask = (sessionID: SessionID, messageID: MessageID, model = ref) =>
@@ -2472,7 +2504,7 @@ noLLMServer.instance(
   30_000,
 )
 
-it.instance("re-inserts AGENTS instructions after the newest user message", () =>
+it.instance("persists AGENTS instructions once the context crosses a threshold", () =>
   Effect.gen(function* () {
     const { directory } = yield* TestInstance
     const { llm } = yield* useServerConfig(providerCfg)
@@ -2480,6 +2512,8 @@ it.instance("re-inserts AGENTS instructions after the newest user message", () =
     const prompt = yield* SessionPrompt.Service
     const sessions = yield* Session.Service
     const chat = yield* sessions.create({ title: "Tail reminder" })
+    const previous = yield* user(chat.id, "previous turn")
+    yield* assistantWithTokens(chat.id, previous.id, 140_000)
     yield* llm.text("done")
     yield* user(chat.id, "hello there")
     yield* prompt.loop({ sessionID: chat.id })
@@ -2494,16 +2528,26 @@ it.instance("re-inserts AGENTS instructions after the newest user message", () =
       )
     const lastUser = request?.messages?.filter((message) => message.role === "user").at(-1)
     const content = JSON.stringify(lastUser)
-    // opencode-enhanced: the reminder is appended to the newest user message,
-    // after the user's own text, and never joins the cached history prefix.
+    // opencode-enhanced: once the context crosses a threshold the reminder is
+    // persisted on the newest user message and never joins the cached prefix.
     expect(content).toContain("The following project instructions were provided earlier")
     expect(content).toContain("# Tail marker instructions")
     expect(content.indexOf("hello there")).toBeLessThan(
       content.indexOf("The following project instructions were provided earlier"),
     )
+
+    const persisted = yield* sessions.messages({ sessionID: chat.id })
+    const reminders = persisted
+      .flatMap((message) => message.parts)
+      .filter(
+        (part) =>
+          part.type === "text" &&
+          part.synthetic &&
+          (part.metadata as Record<string, unknown> | undefined)?.[AGENTS_REMINDER_METADATA_KEY],
+      )
+    expect(reminders).toHaveLength(1)
   }),
 )
-
 it.instance("honors the agents tail reminder toggle", () =>
   Effect.gen(function* () {
     const { directory } = yield* TestInstance
@@ -2515,6 +2559,8 @@ it.instance("honors the agents tail reminder toggle", () =>
     const prompt = yield* SessionPrompt.Service
     const sessions = yield* Session.Service
     const chat = yield* sessions.create({ title: "Tail reminder off" })
+    const previous = yield* user(chat.id, "previous turn")
+    yield* assistantWithTokens(chat.id, previous.id, 140_000)
     yield* llm.text("done")
     yield* user(chat.id, "hello there")
     yield* prompt.loop({ sessionID: chat.id })

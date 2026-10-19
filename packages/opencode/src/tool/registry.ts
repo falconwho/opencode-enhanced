@@ -16,6 +16,7 @@ import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
 import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
+import { MemoryListTool, MemoryNoteTool, MemoryReadTool, MemorySearchTool } from "./memory"
 import * as Tool from "./tool"
 import { Config } from "@/config/config"
 import { type ToolContext as PluginToolContext, type ToolDefinition } from "@opencode-ai/plugin"
@@ -49,6 +50,7 @@ import { Skill } from "../skill"
 import { Permission } from "@/permission"
 import { BackgroundJob } from "@/background/job"
 import { RuntimeFlags } from "@/effect/runtime-flags"
+import { Memory } from "@/memory"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { MCP } from "@/mcp"
@@ -114,6 +116,10 @@ const layer = Layer.effect(
     const greptool = yield* GrepTool
     const patchtool = yield* ApplyPatchTool
     const skilltool = yield* SkillTool
+    const memoryList = yield* MemoryListTool
+    const memoryRead = yield* MemoryReadTool
+    const memorySearch = yield* MemorySearchTool
+    const memoryNote = yield* MemoryNoteTool
     const agent = yield* Agent.Service
     const codeMode = flags.experimentalCodeMode ? yield* Effect.promise(() => import("./code-mode")) : undefined
     const codeModeTool = codeMode ? yield* codeMode.CodeModeTool : undefined
@@ -203,7 +209,7 @@ const layer = Layer.effect(
           }
         }
 
-        yield* config.get()
+        const cfg = yield* config.get()
         const questionEnabled = ["app", "cli", "desktop"].includes(flags.client) || flags.enableQuestionTool
 
         const tool = yield* Effect.all({
@@ -223,6 +229,10 @@ const layer = Layer.effect(
           question: Tool.init(question),
           lsp: Tool.init(lsptool),
           plan: Tool.init(plan),
+          memory_list: Tool.init(memoryList),
+          memory_read: Tool.init(memoryRead),
+          memory_search: Tool.init(memorySearch),
+          memory_note: Tool.init(memoryNote),
           ...(codeModeTool ? { execute: Tool.init(codeModeTool) } : {}),
         })
 
@@ -243,6 +253,9 @@ const layer = Layer.effect(
             tool.search,
             tool.skill,
             tool.patch,
+            ...(cfg.experimental?.memory
+              ? [tool.memory_list, tool.memory_read, tool.memory_search, tool.memory_note]
+              : []),
             ...(tool.execute ? [tool.execute] : []),
             ...(flags.experimentalLspTool ? [tool.lsp] : []),
             ...(flags.experimentalPlanMode && flags.client === "cli" ? [tool.plan] : []),
@@ -297,6 +310,8 @@ const layer = Layer.effect(
         if (tool.id === QuestionTool.id && input.agent.name !== "plan" && !allowBuildQuestions) {
           return false
         }
+
+        if (tool.id.startsWith("memory_") && !cfg.experimental?.memory) return false
 
         if (tool.id === WebSearchTool.id) {
           return webSearchEnabled(input.providerID, { exa: flags.enableExa, parallel: flags.enableParallel })
@@ -457,6 +472,7 @@ export const node = LayerNode.make({
     MCP.node,
     Database.node,
     Ripgrep.node,
+    Memory.node,
   ],
 })
 

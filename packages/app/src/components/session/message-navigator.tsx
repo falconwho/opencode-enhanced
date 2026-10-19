@@ -20,7 +20,7 @@ export function SessionMessageNavigator(props: { sessionID?: string; onJump?: (m
       .sort((a, b) => a.time.created - b.time.created || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .map((message) => {
         const text = (sync().data.part[message.id] ?? [])
-          .filter((part) => part.type === "text")
+          .filter((part) => part.type === "text" && !part.synthetic)
           .map((part) => ("text" in part ? ((part.text as string) ?? "") : ""))
           .join(" ")
           .replace(/\s+/g, " ")

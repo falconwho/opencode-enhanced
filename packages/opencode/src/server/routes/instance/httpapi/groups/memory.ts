@@ -15,7 +15,7 @@ export const MemoryConfigInput = Schema.Struct({
   effort: Schema.optional(Schema.Literals(["low", "medium", "high"])),
 })
 
-// opencode-enhanced F8: read/clear the long-term memory file.
+// opencode-enhanced F8: read/clear the Codex v2 memory summary.
 export const MemoryApi = HttpApi.make("memory").add(
   HttpApiGroup.make("memory")
     .add(
@@ -23,13 +23,26 @@ export const MemoryApi = HttpApi.make("memory").add(
         query: WorkspaceRoutingQuery,
         success: described(
           Schema.Struct({ path: Schema.String, content: Schema.String }),
-          "Memory file path and content",
+          "Memory summary path and content",
         ),
       }).annotateMerge(
         OpenApi.annotations({
           identifier: "memory.get",
-          summary: "Read long-term memory",
-          description: "Get the long-term memory file path and its current content.",
+          summary: "Read memory summary",
+          description: "Get the memory_summary.md path and its current content.",
+        }),
+      ),
+      HttpApiEndpoint.get("summary", `${root}/summary`, {
+        query: WorkspaceRoutingQuery,
+        success: described(
+          Schema.Struct({ path: Schema.String, content: Schema.String }),
+          "Memory summary path and content",
+        ),
+      }).annotateMerge(
+        OpenApi.annotations({
+          identifier: "memory.summary",
+          summary: "Read memory summary",
+          description: "Get the consolidated memory_summary.md path and its current content.",
         }),
       ),
       HttpApiEndpoint.post("clear", `${root}/clear`, {
@@ -40,7 +53,8 @@ export const MemoryApi = HttpApi.make("memory").add(
         OpenApi.annotations({
           identifier: "memory.clear",
           summary: "Clear long-term memory",
-          description: "Delete the long-term memory file and reset extraction state.",
+          description:
+            "Delete memory_summary.md, rollout_summaries, ad-hoc notes and the extraction state, then reset in-memory caches.",
         }),
       ),
       HttpApiEndpoint.post("configure", `${root}/config`, {

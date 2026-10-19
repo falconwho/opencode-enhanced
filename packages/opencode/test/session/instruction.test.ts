@@ -266,46 +266,21 @@ describe("Instruction.systemPaths global config", () => {
   )
 })
 
-describe("Instruction.tail", () => {
-  it.live("re-inserts the instruction reminder and the memory in order", () =>
+describe("Instruction.reminder", () => {
+  it.live("re-inserts the project instructions", () =>
     Effect.gen(function* () {
-      const globalTmp = yield* tmpWithFiles({
-        "AGENTS.md": "# Global Instructions",
-        "memory/MEMORY.md": "- prefers concise replies",
-      })
+      const globalTmp = yield* tmpWithFiles({ "AGENTS.md": "# Global Instructions" })
       const projectTmp = yield* tmpdirScoped()
 
       yield* Effect.gen(function* () {
         const svc = yield* Instruction.Service
-        const tail = yield* svc.tail()
+        const reminder = yield* svc.reminder()
 
-        expect(tail).toHaveLength(2)
-        expect(tail[0]).toContain("<system-reminder>")
-        expect(tail[0]).toContain(`Instructions from: ${path.join(globalTmp, "AGENTS.md")}`)
-        expect(tail[0]).toContain("# Global Instructions")
-        expect(tail[1]).toContain("<user-memory>")
-        expect(tail[1]).toContain("- prefers concise replies")
-        expect(tail[1]).toContain(path.join(globalTmp, "memory", "MEMORY.md"))
-      }).pipe(
-        provideInstance(projectTmp),
-        provideInstruction({ home: globalTmp, config: globalTmp, data: globalTmp }, undefined, {
-          experimental: { memory: true },
-        }),
-      )
-    }),
-  )
-
-  it.live("keeps memory out of the front system prompt", () =>
-    Effect.gen(function* () {
-      const globalTmp = yield* tmpWithFiles({ "memory/MEMORY.md": "- prefers concise replies" })
-      const projectTmp = yield* tmpdirScoped()
-
-      yield* Effect.gen(function* () {
-        const svc = yield* Instruction.Service
-        const system = yield* svc.system()
-        expect(system.join("\n")).not.toContain("<user-memory>")
-        const tail = yield* svc.tail()
-        expect(tail.join("\n")).toContain("<user-memory>")
+        expect(reminder).toHaveLength(1)
+        expect(reminder[0]).toContain("<system-reminder>")
+        expect(reminder[0]).toContain(`Instructions from: ${path.join(globalTmp, "AGENTS.md")}`)
+        expect(reminder[0]).toContain("# Global Instructions")
+        expect(reminder[0]).not.toContain("<user-memory>")
       }).pipe(
         provideInstance(projectTmp),
         provideInstruction({ home: globalTmp, config: globalTmp, data: globalTmp }, undefined, {
@@ -317,18 +292,12 @@ describe("Instruction.tail", () => {
 
   it.live("omits the instruction reminder when agents_tail_reminder is false", () =>
     Effect.gen(function* () {
-      const globalTmp = yield* tmpWithFiles({
-        "AGENTS.md": "# Global Instructions",
-        "memory/MEMORY.md": "- prefers concise replies",
-      })
+      const globalTmp = yield* tmpWithFiles({ "AGENTS.md": "# Global Instructions" })
       const projectTmp = yield* tmpdirScoped()
 
       yield* Effect.gen(function* () {
         const svc = yield* Instruction.Service
-        const tail = yield* svc.tail()
-        expect(tail).toHaveLength(1)
-        expect(tail[0]).toContain("<user-memory>")
-        expect(tail[0]).not.toContain("# Global Instructions")
+        expect(yield* svc.reminder()).toEqual([])
       }).pipe(
         provideInstance(projectTmp),
         provideInstruction({ home: globalTmp, config: globalTmp, data: globalTmp }, undefined, {
@@ -338,14 +307,14 @@ describe("Instruction.tail", () => {
     }),
   )
 
-  it.live("returns nothing when instructions are absent and memory is disabled", () =>
+  it.live("returns nothing when instructions are absent", () =>
     Effect.gen(function* () {
       const globalTmp = yield* tmpdirScoped()
       const projectTmp = yield* tmpdirScoped()
 
       yield* Effect.gen(function* () {
         const svc = yield* Instruction.Service
-        expect(yield* svc.tail()).toEqual([])
+        expect(yield* svc.reminder()).toEqual([])
       }).pipe(provideInstance(projectTmp), provideInstruction({ home: globalTmp, config: globalTmp, data: globalTmp }))
     }),
   )

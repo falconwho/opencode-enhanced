@@ -317,6 +317,16 @@ export function MessageTimeline(props: {
   const parentTitle = createMemo(() => sessionTitle(parent()?.title) ?? language.t("command.session.new"))
   const getMsgParts = (msgId: string) => sync().data.part[msgId] ?? emptyParts
   const getMsgPart = (messageID: string, partID: string) => getMsgParts(messageID).find((part) => part.id === partID)
+  // opencode-enhanced: persisted AGENTS.md reminders are model context, not
+  // user-visible message content.
+  const getDisplayParts = (msgId: string) =>
+    getMsgParts(msgId).filter((part) => {
+      if (part.type !== "text" || !part.synthetic) return true
+      const marker = (part.metadata as Record<string, unknown> | undefined)?.["opencode-enhanced"] as
+        | { kind?: string }
+        | undefined
+      return marker?.kind !== "agents-reminder"
+    })
   const childTaskDescription = createMemo(() => {
     const id = sessionID()
     if (!id) return
@@ -1091,7 +1101,7 @@ export function MessageTimeline(props: {
       case "CommentStrip": {
         const commentStripRow = row as Accessor<TimelineRowByTag<"CommentStrip">>
         const comments = createMemo(() =>
-          getMsgParts(commentStripRow().userMessageID).flatMap((part) => MessageComment.fromPart(part) ?? []),
+          getDisplayParts(commentStripRow().userMessageID).flatMap((part) => MessageComment.fromPart(part) ?? []),
         )
         return (
           <TimelineRowFrame row={commentStripRow}>
@@ -1140,7 +1150,7 @@ export function MessageTimeline(props: {
         })
         const messageComments = createMemo(() => {
           if (!settings.general.newLayoutDesigns()) return []
-          return getMsgParts(userMessageRow().userMessageID).flatMap((part) => MessageComment.fromPart(part) ?? [])
+          return getDisplayParts(userMessageRow().userMessageID).flatMap((part) => MessageComment.fromPart(part) ?? [])
         })
         return (
           <TimelineRowFrame row={userMessageRow}>
@@ -1150,7 +1160,7 @@ export function MessageTimeline(props: {
                   <div data-slot="session-turn-message-content" aria-live="off">
                     <Message
                       message={message()}
-                      parts={getMsgParts(userMessageRow().userMessageID)}
+                      parts={getDisplayParts(userMessageRow().userMessageID)}
                       actions={props.actions}
                       useV2Actions={settings.general.newLayoutDesigns()}
                       comments={messageComments()}

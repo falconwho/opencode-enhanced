@@ -1186,9 +1186,12 @@ export const dict: Record<string, string> = {
   "settings.general.row.memory.clear": "Clear",
   "settings.general.row.memory.empty": "(no memory yet)",
   "settings.general.row.memory.cleared": "Memory cleared",
+  "settings.general.row.memory.viewSummary": "View summary",
+  "settings.general.row.memory.summaryTitle": "Memory summary",
+  "settings.general.row.memory.summaryEmpty": "(no memory summary yet)",
   "settings.general.row.buildQuestions.title": "Ask questions in Build mode",
   "settings.general.row.buildQuestions.description": "Allow the AI to ask you questions while working in Build mode (like in Plan mode).",
   "settings.general.row.memoryView.title": "Long-term memory",
   "settings.general.row.agentsReminder.title": "AGENTS reminder",
-  "settings.general.row.agentsReminder.description": "Re-insert AGENTS.md instructions after the conversation history so long conversations keep following them.",
+  "settings.general.row.agentsReminder.description": "Insert AGENTS.md reminders at fixed context thresholds so long conversations keep following them.",
 }

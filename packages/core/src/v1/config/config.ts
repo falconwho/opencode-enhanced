@@ -186,7 +186,7 @@ export const Info = Schema.Struct({
         description: "Policy statements applied to supported resources, such as provider access",
       }),
       memory: Schema.optional(Schema.Boolean).annotate({
-        description: "opencode-enhanced: enable long-term memory extraction and injection",
+        description: "opencode-enhanced: enable Codex v2 memory (bounded summary injection, rollout summaries, ad-hoc notes, background consolidation)",
       }),
       allow_build_questions: Schema.optional(Schema.Boolean).annotate({
         description:
@@ -194,7 +194,7 @@ export const Info = Schema.Struct({
       }),
       agents_tail_reminder: Schema.optional(Schema.Boolean).annotate({
         description:
-          "opencode-enhanced: re-inject AGENTS.md instructions after the conversation history (default: enabled). Turn off to avoid the recurring reminder.",
+          "opencode-enhanced: persist AGENTS.md reminders at fixed context thresholds (default: enabled). Turn off to avoid the recurring reminder.",
       }),
     }),
   ),

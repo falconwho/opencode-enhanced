@@ -55,6 +55,8 @@ import { eq } from "drizzle-orm"
 import { SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
+import { AgentsReminder } from "./agents-reminder"
+import { Memory } from "@/memory"
 import { LLMEvent } from "@opencode-ai/llm"
 
 // @ts-ignore
@@ -132,6 +134,7 @@ const layer = Layer.effect(
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     const scope = yield* Scope.Scope
     const instruction = yield* Instruction.Service
+    const memory = yield* Memory.Service
     const state = yield* SessionRunState.Service
     const revert = yield* SessionRevert.Service
     const summary = yield* SessionSummary.Service
@@ -1085,6 +1088,10 @@ const layer = Layer.effect(
         let step = 0
         const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
 
+        // opencode-enhanced: run the Codex-style memory pipeline in the
+        // background at the start of each root turn.
+        yield* memory.startup(sessionID).pipe(Effect.forkIn(scope))
+
         while (true) {
           yield* status.set(sessionID, { type: "busy" })
           yield* Effect.logInfo("loop", { "session.id": sessionID, step })
@@ -1183,26 +1190,21 @@ const layer = Layer.effect(
             Effect.provideService(Session.Service, sessions),
           )
 
-          // opencode-enhanced: re-insert the instruction reminder and the
-          // long-term memory after the conversation history (appended to the
-          // newest user message) so the volatile memory stays out of the cached
-          // prefix and the rules stay close to the newest turn.
-          const tailReminders = yield* instruction.tail().pipe(Effect.orDie)
-          if (tailReminders.length > 0) {
-            const target = msgs.findLast((message) => message.info.role === "user")
-            if (target) {
-              for (const text of tailReminders) {
-                target.parts.push({
-                  id: PartID.ascending(),
-                  messageID: target.info.id,
-                  sessionID: target.info.sessionID,
-                  type: "text",
-                  text,
-                  synthetic: true,
-                })
-              }
-            }
-          }
+          // opencode-enhanced: persist AGENTS.md reminders at explicit context
+          // thresholds. Persisted parts keep their position, so the block does
+          // not move and invalidate the cached prefix on every turn.
+          const agentsReminderCfg = yield* config.get().pipe(Effect.catch(() => Effect.succeed(undefined)))
+          yield* AgentsReminder.apply({
+            sessionID,
+            messages: msgs,
+            config: agentsReminderCfg,
+            instruction,
+            sessions,
+          }).pipe(
+            Effect.catchCause((cause) =>
+              Effect.logError("agents reminder failed", { sessionID, cause: Cause.pretty(cause) }),
+            ),
+          )
 
           const msg: SessionV1.Assistant = {
             id: MessageID.ascending(),
@@ -1275,16 +1277,18 @@ const layer = Layer.effect(
 
             yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
 
-            const [skills, env, instructions, mcpInstructions, modelMsgs] = yield* Effect.all([
+            const [skills, env, instructions, mcpInstructions, memorySummary, modelMsgs] = yield* Effect.all([
               sys.skills(agent),
               sys.environment(model),
               instruction.system().pipe(Effect.orDie),
               sys.mcp(agent, session.permission),
+              memory.systemSummary(sessionID),
               MessageV2.toModelMessagesEffect(msgs, model),
             ])
             const system = [
               ...env,
               ...instructions,
+              ...(memorySummary ? [memorySummary] : []),
               ...(mcpInstructions ? [mcpInstructions] : []),
               ...(skills ? [skills] : []),
             ]
@@ -1638,6 +1642,7 @@ export const node = LayerNode.make({
     Image.node,
     CrossSpawnSpawner.node,
     Instruction.node,
+    Memory.node,
     SessionRunState.node,
     SessionRevert.node,
     SessionSummary.node,

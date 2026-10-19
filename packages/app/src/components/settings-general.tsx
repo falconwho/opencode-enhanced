@@ -201,14 +201,14 @@ export const SettingsGeneral: Component = () => {
     return res.json()
   }
   const viewMemory = () => {
-    void memoryFetch("/memory")
+    void memoryFetch("/memory/summary")
       .then((data: { path?: string; content?: string }) => {
         dialog.show(() => (
-          <Dialog title={language.t("settings.general.row.memoryView.title")}>
+          <Dialog title={language.t("settings.general.row.memory.summaryTitle")}>
             <div class="flex flex-col gap-2 px-1">
               <div class="text-12-regular text-text-weak break-all">{data.path}</div>
               <pre class="max-h-96 overflow-auto whitespace-pre-wrap rounded-md bg-background-base p-3 text-12-regular text-text-base">
-                {data.content?.trim() || language.t("settings.general.row.memory.empty")}
+                {data.content?.trim() || language.t("settings.general.row.memory.summaryEmpty")}
               </pre>
             </div>
           </Dialog>
@@ -508,7 +508,7 @@ export const SettingsGeneral: Component = () => {
         >
           <div class="flex items-center gap-2" data-action="settings-memory">
             <Button size="small" variant="ghost" onClick={viewMemory}>
-              {language.t("settings.general.row.memory.view")}
+              {language.t("settings.general.row.memory.viewSummary")}
             </Button>
             <Show when={memoryEnabled()}>
               <Button size="small" variant="ghost" onClick={clearMemory}>

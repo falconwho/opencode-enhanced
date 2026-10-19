@@ -13,6 +13,11 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
       return { path: svc.file(), content }
     })
 
+    const summary = Effect.fn("MemoryHttpApi.summary")(function* () {
+      const content = yield* svc.read()
+      return { path: svc.file(), content }
+    })
+
     const clear = Effect.fn("MemoryHttpApi.clear")(function* () {
       yield* svc.clear()
       return true
@@ -25,6 +30,6 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
       return true
     })
 
-    return handlers.handle("get", get).handle("clear", clear).handle("configure", configure)
+    return handlers.handle("get", get).handle("summary", summary).handle("clear", clear).handle("configure", configure)
   }),
 )

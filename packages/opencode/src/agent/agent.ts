@@ -13,6 +13,7 @@ import PROMPT_GENERATE from "./generate.txt"
 import PROMPT_APPROVAL from "./prompt/approval.txt"
 import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_MEMORY from "./prompt/memory.txt"
+import PROMPT_MEMORY_CONSOLIDATION from "./prompt/memory-consolidation.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
@@ -143,6 +144,10 @@ const layer = Layer.effect(
           question: "deny",
           plan_enter: "deny",
           plan_exit: "deny",
+          memory_list: "allow",
+          memory_read: "allow",
+          memory_search: "allow",
+          memory_note: "allow",
         })
 
         const user = Permission.fromConfig(cfg.permission ?? {})
@@ -288,6 +293,23 @@ const layer = Layer.effect(
               user,
             ),
             prompt: PROMPT_MEMORY,
+          },
+          "memory-consolidation": {
+            name: "memory-consolidation",
+            mode: "primary",
+            // opencode-enhanced: consolidate rollout summaries into the single
+            // memory_summary.md with low reasoning effort by default.
+            options: { reasoningEffort: "low" },
+            native: true,
+            hidden: true,
+            permission: Permission.merge(
+              defaults,
+              Permission.fromConfig({
+                "*": "deny",
+              }),
+              user,
+            ),
+            prompt: PROMPT_MEMORY_CONSOLIDATION,
           },
           summary: {
             name: "summary",

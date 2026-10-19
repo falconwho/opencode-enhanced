@@ -9,7 +9,17 @@ export type PermissionMode = "ask" | "readonly" | "ai" | "full"
 
 export const PERMISSION_MODES: PermissionMode[] = ["ask", "readonly", "ai", "full"]
 
-export const READONLY_PERMISSIONS = new Set(["read", "glob", "grep", "list", "webfetch", "websearch"])
+export const READONLY_PERMISSIONS = new Set([
+  "read",
+  "glob",
+  "grep",
+  "list",
+  "webfetch",
+  "websearch",
+  "memory_list",
+  "memory_read",
+  "memory_search",
+])
 
 export { acceptKey as modeKey, directoryAcceptKey as directoryModeKey }
 

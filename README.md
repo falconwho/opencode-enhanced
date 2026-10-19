@@ -11,7 +11,7 @@ This is the harness I use every day. Every feature in it was refined over and ov
 
 ## How to Use
 
-Only the Windows version is released so far, now upgraded to version 1.6. To download, see the [Releases page](https://github.com/falconwho/opencode-enhanced/releases).
+Only the Windows version is released so far, now upgraded to version 1.7. To download, see the [Releases page](https://github.com/falconwho/opencode-enhanced/releases).
 
 - System files and configuration are fully isolated, so your existing OpenCode installation is not affected.
 - Portable edition: unzip the archive and open `opencode Enhanced.exe` inside to start using it.
