@@ -1272,6 +1272,6 @@ export const dict = {
   "sidebar.folders.delete.title": "Delete folder",
   "settings.general.row.buildQuestions.title": "Ask questions in Build mode",
   "settings.general.row.buildQuestions.description": "Allow the AI to ask you questions while working in Build mode (like in Plan mode).",
-  "settings.general.row.agentsReminder.title": "AGENTS reminder",
+  "settings.general.row.agentsReminder.title": "AGENTS attention reinforcement",
   "settings.general.row.agentsReminder.description": "Insert AGENTS.md reminders at fixed context thresholds so long conversations keep following them.",
 }
