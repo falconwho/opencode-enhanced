@@ -11,11 +11,15 @@ This is the harness I use every day. Every feature in it was refined over and ov
 
 ## How to Use
 
-Only the Windows version is released so far, now upgraded to version 1.7. To download, see the [Releases page](https://github.com/falconwho/opencode-enhanced/releases).
+Only the Windows version is released so far, now upgraded to version 1.8. To download, see the [Releases page](https://github.com/falconwho/opencode-enhanced/releases).
 
 - System files and configuration are fully isolated, so your existing OpenCode installation is not affected.
 - Portable edition: unzip the archive and open `opencode Enhanced.exe` inside to start using it.
 - The interface supports multiple languages.
+
+### What's New in 1.8
+
+- Fixed stale todos from a previous task reappearing in a new task: a new task now clears the old list and shows only the list submitted in the current turn. An explicit continuation such as "continue" keeps the previous progress unchanged.
 
 ### What's New in 1.7
 

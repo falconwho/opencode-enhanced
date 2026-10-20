@@ -11,11 +11,15 @@
 
 ## 使用方式
 
-目前发布了window版本，现在已经升级1.7版，下载点击 [发布页面](https://github.com/falconwho/opencode-enhanced/releases)
+目前发布了window版本，现在已经升级1.8版，下载点击 [发布页面](https://github.com/falconwho/opencode-enhanced/releases)
 
 - 系统文件和配置参数独立，不影响现有OpenCode运行。
 - 免安装版，解压zip后直接打开里面的 opencode Enhanced.exe 即可使用
 - 界面支持多语言
+
+### 1.8版更新内容
+
+- 修复旧任务 todo 列表在新任务中重新出现的问题：新任务会清空上一轮 todo，只显示本轮实际提交的列表；明确说“继续”时保留上一轮进度不变。
 
 ### 1.7版更新内容
 

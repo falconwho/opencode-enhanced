@@ -56,6 +56,8 @@ import { SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
 import { AgentsReminder } from "./agents-reminder"
+import { isContinuationPrompt } from "./continuation"
+import { Todo } from "./todo"
 import { Memory } from "@/memory"
 import { LLMEvent } from "@opencode-ai/llm"
 
@@ -116,6 +118,7 @@ const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
     const status = yield* SessionStatus.Service
+    const todo = yield* Todo.Service
     const sessions = yield* Session.Service
     const agents = yield* Agent.Service
     const provider = yield* Provider.Service
@@ -1057,6 +1060,20 @@ const layer = Layer.effect(
     )(function* (input: PromptInput) {
       const session = yield* sessions.get(input.sessionID).pipe(Effect.orDie)
       yield* revert.cleanup(session)
+
+      // opencode-enhanced: a new task starts with a clean todo list. An
+      // explicit continuation (e.g. "继续") keeps the unfinished list intact.
+      if ((yield* status.get(input.sessionID)).type === "idle" && !isContinuationPrompt(input.parts)) {
+        const existing = yield* todo.get(input.sessionID)
+        if (existing.length > 0) {
+          yield* todo.update({ sessionID: input.sessionID, todos: [] })
+          yield* Effect.logInfo("session todos reset for new task", {
+            sessionID: input.sessionID,
+            count: existing.length,
+          })
+        }
+      }
+
       const message = yield* createUserMessage(input)
       yield* sessions.touch(input.sessionID)
 
@@ -1625,6 +1642,7 @@ export const node = LayerNode.make({
   layer: layer,
   deps: [
     SessionStatus.node,
+    Todo.node,
     Session.node,
     Agent.node,
     Provider.node,

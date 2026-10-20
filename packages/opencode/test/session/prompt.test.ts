@@ -561,6 +561,140 @@ it.instance("loop exits without an LLM request for interrupted orphan tool calls
   }),
 )
 
+it.instance("keeps todos for an explicit continuation prompt", () =>
+  Effect.gen(function* () {
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const todo = yield* Todo.Service
+    const chat = yield* sessions.create({ title: "Continue" })
+    yield* todo.update({
+      sessionID: chat.id,
+      todos: [
+        { content: "finished step", status: "completed", priority: "high" },
+        { content: "remaining step", status: "in_progress", priority: "high" },
+      ],
+    })
+
+    yield* prompt.prompt({
+      sessionID: chat.id,
+      agent: "build",
+      noReply: true,
+      parts: [{ type: "text", text: "继续" }],
+    })
+
+    const remaining = yield* todo.get(chat.id)
+    expect(remaining).toHaveLength(2)
+    expect(remaining[0]?.status).toBe("completed")
+    expect(remaining[1]?.status).toBe("in_progress")
+  }),
+)
+
+it.instance("clears todos for a new task prompt", () =>
+  Effect.gen(function* () {
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const todo = yield* Todo.Service
+    const chat = yield* sessions.create({ title: "New task" })
+    yield* todo.update({
+      sessionID: chat.id,
+      todos: [
+        { content: "old step", status: "in_progress", priority: "high" },
+        { content: "old pending", status: "pending", priority: "medium" },
+      ],
+    })
+
+    yield* prompt.prompt({
+      sessionID: chat.id,
+      agent: "build",
+      noReply: true,
+      parts: [{ type: "text", text: "开始一个新功能" }],
+    })
+
+    expect(yield* todo.get(chat.id)).toEqual([])
+  }),
+)
+
+it.instance("treats continuation plus new task content as a new task", () =>
+  Effect.gen(function* () {
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const todo = yield* Todo.Service
+    const chat = yield* sessions.create({ title: "Continuation plus task" })
+    yield* todo.update({
+      sessionID: chat.id,
+      todos: [{ content: "old step", status: "in_progress", priority: "high" }],
+    })
+
+    yield* prompt.prompt({
+      sessionID: chat.id,
+      agent: "build",
+      noReply: true,
+      parts: [{ type: "text", text: "继续做一个新功能" }],
+    })
+
+    expect(yield* todo.get(chat.id)).toEqual([])
+  }),
+)
+
+it.instance("does not clear todos for a prompt during an active run", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const gate = yield* Deferred.make<void>()
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const todo = yield* Todo.Service
+    const chat = yield* sessions.create({ title: "Steer" })
+
+    yield* llm.hold("first", deferredAsPromise(gate))
+    yield* llm.text("second")
+
+    const first = yield* prompt
+      .prompt({
+        sessionID: chat.id,
+        agent: "build",
+        model: ref,
+        parts: [{ type: "text", text: "first" }],
+      })
+      .pipe(Effect.forkChild)
+
+    yield* llm.wait(1)
+    yield* waitForBusy(chat.id)
+
+    yield* todo.update({
+      sessionID: chat.id,
+      todos: [{ content: "active step", status: "in_progress", priority: "high" }],
+    })
+
+    const messageID = MessageID.ascending()
+    const second = yield* prompt
+      .prompt({
+        sessionID: chat.id,
+        messageID,
+        agent: "build",
+        model: ref,
+        parts: [{ type: "text", text: "new task" }],
+      })
+      .pipe(Effect.forkChild)
+
+    yield* pollWithTimeout(
+      sessions.messages({ sessionID: chat.id }).pipe(
+        Effect.map((messages) =>
+          messages.some((message) => message.info.role === "user" && message.info.id === messageID)
+            ? true
+            : undefined,
+        ),
+      ),
+      "timed out waiting for second prompt to save",
+      "10 seconds",
+    )
+
+    expect(yield* todo.get(chat.id)).toHaveLength(1)
+
+    yield* Deferred.succeed(gate, void 0)
+    yield* Fiber.await(first)
+    yield* Fiber.await(second)
+  }),
+)
 it.instance("loop calls LLM and returns assistant message", () =>
   Effect.gen(function* () {
     const { llm } = yield* useServerConfig(providerCfg)
