@@ -17,6 +17,12 @@ Only the Windows version is released so far, now upgraded to version 1.7. To dow
 - Portable edition: unzip the archive and open `opencode Enhanced.exe` inside to start using it.
 - The interface supports multiple languages.
 
+### What's New in 1.7
+
+- Rewrote the memory system to inject a memory summary file into context in a Codex-like way and look up memory details on demand. This reduces the amount of memory content kept in context and improves cache hit rates.
+- Adjusted the AGENTS.md attention reinforcement feature to use segmented, persisted context logic, improving cache hit rates.
+- This version makes significant data-structure changes; back up the "OpenCode Enhanced" database before use.
+
 ## The Classic UI Is Back!
 
 Not used to OpenCode's new interface? This project brings the classic UI back! Perfect for those who prefer the old look.
@@ -40,7 +46,7 @@ Not used to OpenCode's new interface? This project brings the classic UI back! P
 | 🔗 **Reference Other Conversations in Chat** | Type @ in the prompt box, then type a conversation title to quickly filter and reference it — or right-click a conversation, copy its link, and paste the ID into the prompt box. |
 | 📇 **Memory Module** | Envious of Codex's memory system? Now you can use one in OpenCode too! The context structure is optimized for the memory system, improving cache hit rates and speeding up cache cold prefill for locally deployed AI models. |
 | 🗨️ **Ask Questions in Build Mode** | When enabled, the model can also ask you questions in Build mode, reducing the chance that plans go off track under vague instructions. |
-| 🛡️ **Stronger Instruction Adherence** | Strengthens the model's attention to global instructions in long contexts. Optionally re-inserts the AGENTS.md content near the tail of long contexts, improving global-instruction adherence for models that follow AGENTS.md poorly. |
+| 🛡️ **AGENTS Attention Reinforcement** | Persists AGENTS.md reminders at fixed long-context thresholds (once per threshold), strengthening the model's attention to global instructions while keeping the cached prompt prefix stable and improving cache hit rates. |
 
 > The AI approval and memory model and their reasoning effort can be changed in Settings. Both the official OpenCode plan and third-party model providers are supported directly, with no extra API configuration. On first launch, the default is DeepSeek V4.1 Flash from the OpenCode Go plan, with reasoning effort set to low.
 
