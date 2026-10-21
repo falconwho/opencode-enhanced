@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, Show } from "solid-js"
+import { createEffect, createMemo, createSignal, onCleanup, Show } from "solid-js"
 import { Icon } from "@opencode-ai/ui/icon"
 import { useLanguage } from "@/context/language"
 import { useSync } from "@/context/sync"
@@ -14,6 +14,9 @@ export function ReasoningPreview(props: { sessionID?: string }) {
   const [collapsed, setCollapsed] = createSignal(false)
   const [pinned, setPinned] = createSignal(false)
   const [messageID, setMessageID] = createSignal<string>()
+  const [stickToBottom, setStickToBottom] = createSignal(true)
+  let previewRef: HTMLPreElement | undefined
+  let scrollFrame: number | undefined
 
   const lastAssistant = createMemo(() => {
     const id = props.sessionID
@@ -50,6 +53,7 @@ export function ReasoningPreview(props: { sessionID?: string }) {
     setMessageID(id)
     setPinned(false)
     setCollapsed(false)
+    setStickToBottom(true)
   })
 
   createEffect(() => {
@@ -64,6 +68,24 @@ export function ReasoningPreview(props: { sessionID?: string }) {
       .filter((line) => line.trim().length > 0)
       .slice(-5),
   )
+
+  const scheduleScroll = () => {
+    if (scrollFrame !== undefined) return
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = undefined
+      if (previewRef) previewRef.scrollTop = previewRef.scrollHeight
+    })
+  }
+
+  createEffect(() => {
+    reasoning()
+    if (collapsed() || !stickToBottom()) return
+    scheduleScroll()
+  })
+
+  onCleanup(() => {
+    if (scrollFrame !== undefined) cancelAnimationFrame(scrollFrame)
+  })
 
   const active = createMemo(() => busy() && reasoning().trim().length > 0)
 
@@ -80,6 +102,7 @@ export function ReasoningPreview(props: { sessionID?: string }) {
             const next = !collapsed()
             setCollapsed(next)
             setPinned(!next)
+            if (!next) setStickToBottom(true)
           }}
         >
           <Icon name="brain" size="small" />
@@ -87,7 +110,14 @@ export function ReasoningPreview(props: { sessionID?: string }) {
           <Icon name={collapsed() ? "expand" : "collapse"} size="small" />
         </button>
         <Show when={!collapsed()}>
-          <pre class="max-h-[120px] overflow-y-auto whitespace-pre-wrap px-3 pb-2 font-mono text-12-regular text-text-weak">
+          <pre
+            ref={previewRef}
+            class="max-h-[120px] overflow-y-auto whitespace-pre-wrap px-3 pb-2 font-mono text-12-regular text-text-weak"
+            onScroll={(event) => {
+              const element = event.currentTarget
+              setStickToBottom(element.scrollHeight - element.scrollTop - element.clientHeight <= 8)
+            }}
+          >
             {lines().join("\n")}
           </pre>
         </Show>
