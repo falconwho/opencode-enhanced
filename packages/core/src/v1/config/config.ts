@@ -194,7 +194,7 @@ export const Info = Schema.Struct({
       }),
       agents_tail_reminder: Schema.optional(Schema.Boolean).annotate({
         description:
-          "opencode-enhanced: persist AGENTS.md reminders at fixed context thresholds (default: enabled). Turn off to avoid the recurring reminder.",
+          "opencode-enhanced: insert AGENTS.md reminders periodically across the context (default: enabled). Turn off to avoid the recurring reminder.",
       }),
     }),
   ),

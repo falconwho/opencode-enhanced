@@ -971,7 +971,7 @@ export const dict = {
   "settings.general.row.buildQuestions.title": "允许在 Build 模式提问",
   "settings.general.row.buildQuestions.description": "允许 AI 在 Build 模式下向你提问（类似 Plan 模式的提问形式）。",
   "settings.general.row.agentsReminder.title": "AGENTS 注意力强化",
-  "settings.general.row.agentsReminder.description": "在固定的上下文阈值处插入 AGENTS.md 提醒，避免长对话时遗忘规则。",
+  "settings.general.row.agentsReminder.description": "间隔性在上下文中插入 AGENTS.md 提醒，避免长对话时遗忘规则。",
   "settings.general.row.memoryView.title": "长期记忆",
   "settings.general.row.shellToolPartsExpanded.title": "展开 Shell 工具调用",
   "settings.general.row.shellToolPartsExpanded.description": "默认在时间线中展开 Shell 工具调用详情",

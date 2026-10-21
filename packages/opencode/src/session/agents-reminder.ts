@@ -2,25 +2,46 @@ import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Effect } from "effect"
 import { PartID, SessionID } from "./schema"
 
-// opencode-enhanced: AGENTS.md reminders are persisted once at explicit context
-// thresholds. Persisting the block keeps its position fixed, so it does not move
+// opencode-enhanced: AGENTS.md reminders are persisted at adaptive context
+// intervals. Persisting the block keeps its position fixed, so it does not move
 // (and invalidate the prompt cache) on every turn.
 
-export const AGENTS_REMINDER_THRESHOLDS = [130_000, 300_000, 450_000, 600_000, 750_000] as const
+export const AGENTS_REMINDER_INTERVAL_MIN = 40_000
+export const AGENTS_REMINDER_INTERVAL_MAX = 150_000
+export const AGENTS_REMINDER_INTERVAL_RATIO = 0.15
+export const AGENTS_REMINDER_CEILING_RATIO = 0.8
 export const AGENTS_REMINDER_METADATA_KEY = "opencode-enhanced"
 
 type MemoryConfig = { experimental?: { agents_tail_reminder?: boolean } }
 type InstructionLike = { reminder: () => Effect.Effect<string[], unknown> }
 type SessionsLike = { updatePart: (part: SessionV1.Part) => Effect.Effect<unknown, unknown> }
 
+function roundUpTenThousand(value: number) {
+  return Math.ceil(value / 10_000) * 10_000
+}
+
+export function agentsReminderThresholds(usableTokens: number) {
+  if (!Number.isFinite(usableTokens) || usableTokens <= 0) return []
+  const ceiling = Math.floor(usableTokens * AGENTS_REMINDER_CEILING_RATIO)
+  const interval = Math.min(
+    AGENTS_REMINDER_INTERVAL_MAX,
+    Math.max(AGENTS_REMINDER_INTERVAL_MIN, roundUpTenThousand(usableTokens * AGENTS_REMINDER_INTERVAL_RATIO)),
+  )
+  const thresholds: number[] = []
+  for (let threshold = interval; threshold < ceiling; threshold += interval) thresholds.push(threshold)
+  return thresholds
+}
+
 export function contextTokens(tokens: SessionV1.Assistant["tokens"] | undefined) {
   if (!tokens) return 0
   return tokens.total || tokens.input + tokens.output + tokens.cache.read + tokens.cache.write
 }
 
-export function dueThresholds(tokens: number, covered: Iterable<number>) {
+export function dueThresholds(tokens: number, covered: Iterable<number>, usableTokens: number) {
   const seen = new Set(covered)
-  return AGENTS_REMINDER_THRESHOLDS.filter((threshold) => tokens >= threshold && !seen.has(threshold))
+  return agentsReminderThresholds(usableTokens).filter(
+    (threshold) => tokens >= threshold && !seen.has(threshold),
+  )
 }
 
 function coveredThresholds(messages: SessionV1.WithParts[]) {
@@ -45,6 +66,7 @@ export const apply = Effect.fn("AgentsReminder.apply")(function* (input: {
   sessionID: SessionID
   messages: SessionV1.WithParts[]
   config: MemoryConfig | undefined
+  usableTokens: number
   instruction: InstructionLike
   sessions: SessionsLike
 }) {
@@ -57,7 +79,7 @@ export const apply = Effect.fn("AgentsReminder.apply")(function* (input: {
   const tokens = contextTokens(
     lastAssistant.info.role === "assistant" ? lastAssistant.info.tokens : undefined,
   )
-  const due = dueThresholds(tokens, coveredThresholds(input.messages))
+  const due = dueThresholds(tokens, coveredThresholds(input.messages), input.usableTokens)
   if (due.length === 0) return
 
   const reminder = yield* input.instruction.reminder().pipe(Effect.orDie)

@@ -1290,5 +1290,5 @@ export const dict = {
   "settings.general.row.buildQuestions.description": "Allow the AI to ask you questions while working in Build mode (like in Plan mode).",
   "settings.general.row.memoryView.title": "Long-term memory",
   "settings.general.row.agentsReminder.title": "AGENTS attention reinforcement",
-  "settings.general.row.agentsReminder.description": "Insert AGENTS.md reminders at fixed context thresholds so long conversations keep following them.",
+  "settings.general.row.agentsReminder.description": "Insert AGENTS.md reminders periodically in the context to avoid forgetting the rules in long conversations.",
 }

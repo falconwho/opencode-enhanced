@@ -4,8 +4,8 @@ import { SessionV1 } from "@opencode-ai/core/v1/session"
 
 import {
   AGENTS_REMINDER_METADATA_KEY,
-  AGENTS_REMINDER_THRESHOLDS,
   AgentsReminder,
+  agentsReminderThresholds,
   contextTokens,
   dueThresholds,
 } from "../../src/session/agents-reminder"
@@ -63,11 +63,21 @@ describe("agents reminder thresholds", () => {
     expect(contextTokens({ ...tokens(10), output: 5, total: 99 })).toBe(99)
   })
 
+  test("builds adaptive thresholds and stops before the compaction margin", () => {
+    expect(agentsReminderThresholds(1_000_000)).toEqual([150_000, 300_000, 450_000, 600_000, 750_000])
+    expect(agentsReminderThresholds(242_000)).toEqual([40_000, 80_000, 120_000, 160_000])
+    expect(agentsReminderThresholds(180_000)).toEqual([40_000, 80_000, 120_000])
+    expect(agentsReminderThresholds(108_000)).toEqual([40_000, 80_000])
+    expect(agentsReminderThresholds(0)).toEqual([])
+  })
+
   test("dueThresholds only returns crossed, uncovered thresholds", () => {
-    expect(dueThresholds(0, [])).toEqual([])
-    expect(dueThresholds(AGENTS_REMINDER_THRESHOLDS[0], [])).toEqual([AGENTS_REMINDER_THRESHOLDS[0]])
-    expect(dueThresholds(310_000, [AGENTS_REMINDER_THRESHOLDS[0]])).toEqual([AGENTS_REMINDER_THRESHOLDS[1]])
-    expect(dueThresholds(310_000, AGENTS_REMINDER_THRESHOLDS)).toEqual([])
+    const thresholds = agentsReminderThresholds(1_000_000)
+    expect(dueThresholds(0, [], 1_000_000)).toEqual([])
+    expect(dueThresholds(thresholds[0]!, [], 1_000_000)).toEqual([thresholds[0]!])
+    expect(dueThresholds(310_000, [thresholds[0]!], 1_000_000)).toEqual([thresholds[1]!])
+    expect(dueThresholds(310_000, thresholds, 1_000_000)).toEqual([])
+    expect(dueThresholds(200_000, [], 242_000).at(-1)).toBe(160_000)
   })
 })
 
@@ -80,6 +90,7 @@ describe("AgentsReminder.apply", () => {
         sessionID: "ses_test" as never,
         messages,
         config: {},
+        usableTokens: 1_000_000,
         instruction,
         sessions,
       }),
@@ -89,13 +100,14 @@ describe("AgentsReminder.apply", () => {
 
   test("persists a synthetic reminder and never repeats a threshold", async () => {
     const { updates, sessions, instruction } = harness()
-    const messages = [userMessage(), assistantMessage(140_000)]
+    const messages = [userMessage(), assistantMessage(160_000)]
     const run = () =>
       Effect.runPromise(
         AgentsReminder.apply({
           sessionID: "ses_test" as never,
           messages,
           config: {},
+          usableTokens: 1_000_000,
           instruction,
           sessions,
         }),
@@ -112,7 +124,7 @@ describe("AgentsReminder.apply", () => {
       thresholds: number[]
     }
     expect(marker.kind).toBe("agents-reminder")
-    expect(marker.thresholds).toEqual([AGENTS_REMINDER_THRESHOLDS[0]])
+    expect(marker.thresholds).toEqual([150_000])
 
     await run()
     expect(updates).toHaveLength(1)
@@ -121,19 +133,18 @@ describe("AgentsReminder.apply", () => {
     await run()
     expect(updates).toHaveLength(2)
     const next = (updates[1] as SessionV1.TextPart).metadata as Record<string, unknown>
-    expect((next[AGENTS_REMINDER_METADATA_KEY] as { thresholds: number[] }).thresholds).toEqual([
-      AGENTS_REMINDER_THRESHOLDS[1],
-    ])
+    expect((next[AGENTS_REMINDER_METADATA_KEY] as { thresholds: number[] }).thresholds).toEqual([300_000])
   })
 
   test("does nothing when the reminder is disabled or empty", async () => {
-    const messages = [userMessage(), assistantMessage(140_000)]
+    const messages = [userMessage(), assistantMessage(160_000)]
     const { updates, sessions, instruction } = harness()
     await Effect.runPromise(
       AgentsReminder.apply({
         sessionID: "ses_test" as never,
         messages,
         config: { experimental: { agents_tail_reminder: false } },
+        usableTokens: 1_000_000,
         instruction,
         sessions,
       }),
@@ -145,6 +156,7 @@ describe("AgentsReminder.apply", () => {
         sessionID: "ses_test" as never,
         messages,
         config: {},
+        usableTokens: 1_000_000,
         instruction: { reminder: () => Effect.succeed([]) },
         sessions,
       }),

@@ -57,6 +57,7 @@ import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
 import { AgentsReminder } from "./agents-reminder"
 import { isContinuationPrompt } from "./continuation"
+import { usable } from "./overflow"
 import { Todo } from "./todo"
 import { Memory } from "@/memory"
 import { LLMEvent } from "@opencode-ai/llm"
@@ -1207,14 +1208,20 @@ const layer = Layer.effect(
             Effect.provideService(Session.Service, sessions),
           )
 
-          // opencode-enhanced: persist AGENTS.md reminders at explicit context
-          // thresholds. Persisted parts keep their position, so the block does
+          // opencode-enhanced: persist AGENTS.md reminders at adaptive context
+          // intervals. Persisted parts keep their position, so the block does
           // not move and invalidate the cached prefix on every turn.
           const agentsReminderCfg = yield* config.get().pipe(Effect.catch(() => Effect.succeed(undefined)))
+          const agentsReminderLimit = usable({
+            cfg: agentsReminderCfg ?? {},
+            model,
+            outputTokenMax: flags.outputTokenMax,
+          })
           yield* AgentsReminder.apply({
             sessionID,
             messages: msgs,
             config: agentsReminderCfg,
+            usableTokens: agentsReminderLimit,
             instruction,
             sessions,
           }).pipe(

@@ -966,7 +966,7 @@ export const dict = {
   "settings.general.row.buildQuestions.title": "允許在 Build 模式提問",
   "settings.general.row.buildQuestions.description": "允許 AI 在 Build 模式下向你提問（類似 Plan 模式的提問形式）。",
   "settings.general.row.agentsReminder.title": "AGENTS 注意力強化",
-  "settings.general.row.agentsReminder.description": "在固定的上下文閾值處插入 AGENTS.md 提醒，避免長對話時遺忘規則。",
+  "settings.general.row.agentsReminder.description": "間隔性在上下文中插入 AGENTS.md 提醒，避免長對話時遺忘規則。",
   "settings.general.row.memoryView.title": "長期記憶",
 
   "settings.general.row.shellToolPartsExpanded.title": "展開 shell 工具區塊",

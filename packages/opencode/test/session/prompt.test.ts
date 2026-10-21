@@ -2647,7 +2647,7 @@ it.instance("persists AGENTS instructions once the context crosses a threshold",
     const sessions = yield* Session.Service
     const chat = yield* sessions.create({ title: "Tail reminder" })
     const previous = yield* user(chat.id, "previous turn")
-    yield* assistantWithTokens(chat.id, previous.id, 140_000)
+    yield* assistantWithTokens(chat.id, previous.id, 160_000)
     yield* llm.text("done")
     yield* user(chat.id, "hello there")
     yield* prompt.loop({ sessionID: chat.id })
@@ -2694,7 +2694,7 @@ it.instance("honors the agents tail reminder toggle", () =>
     const sessions = yield* Session.Service
     const chat = yield* sessions.create({ title: "Tail reminder off" })
     const previous = yield* user(chat.id, "previous turn")
-    yield* assistantWithTokens(chat.id, previous.id, 140_000)
+    yield* assistantWithTokens(chat.id, previous.id, 160_000)
     yield* llm.text("done")
     yield* user(chat.id, "hello there")
     yield* prompt.loop({ sessionID: chat.id })
