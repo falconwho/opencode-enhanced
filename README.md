@@ -19,13 +19,10 @@ Only the Windows version is released so far, now upgraded to version 1.8. To dow
 
 ### What's New in 1.8
 
-- Fixed stale todos from a previous task reappearing in a new task: a new task now clears the old list and shows only the list submitted in the current turn. An explicit continuation such as "continue" keeps the previous progress unchanged.
-
-### What's New in 1.7
-
-- Rewrote the memory system to inject a memory summary file into context in a Codex-like way and look up memory details on demand. This reduces the amount of memory content kept in context and improves cache hit rates.
-- Adjusted the AGENTS.md attention reinforcement feature to use segmented, persisted context logic, improving cache hit rates.
-- This version makes significant data-structure changes; back up the "OpenCode Enhanced" database before use.
+- **Todo list display fix**: Fixed the upstream bug where a completed todo list from an old task reappeared in new messages; a new todo list is created when the task list changes.
+- **AGENTS attention reinforcement logic adjustment**: The insertion interval for global instructions is now calculated automatically from the model's maximum context limit, adapting to more models.
+- **Reasoning preview auto-follow**: With reasoning display off, the 5-line preview now stays scrolled to the newest reasoning while streaming; scrolling up pauses auto-follow.
+- This version makes significant data-structure changes; users coming from before 1.7 should back up the "OpenCode Enhanced" database before use.
 
 ## The Classic UI Is Back!
 
