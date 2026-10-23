@@ -332,6 +332,7 @@ const messageBase = {
 export const User = Schema.Struct({
   ...messageBase,
   role: Schema.Literal("user"),
+  synthetic: Schema.optional(Schema.Boolean),
   time: Schema.Struct({
     created: Timestamp,
   }),

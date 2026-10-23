@@ -113,6 +113,7 @@ export const persist = Effect.fn("AgentsReminder.persist")(function* (input: {
     id: MessageID.ascending(),
     sessionID: input.sessionID,
     role: "user",
+    synthetic: true,
     time: { created: Date.now() },
     agent: target.info.agent,
     model: { ...target.info.model },

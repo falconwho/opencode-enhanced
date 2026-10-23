@@ -18,6 +18,7 @@ import { message as cleanMessage } from "@/utils/diffs"
 import { sessionNotFoundError } from "@/utils/server-errors"
 import { rootSession } from "@/utils/session-route"
 import { normalizeSessionInfo } from "@/utils/session"
+import { isAgentsReminderPart, isSyntheticAgentsReminderMessage } from "@/utils/synthetic-user-message"
 import { compareMessages, messageKey, normalizeSessionMessages } from "@/utils/session-message"
 import { dropSessionCaches, pickSessionCacheEvictions, SESSION_CACHE_LIMIT } from "./global-sync/session-cache"
 import { createV2SessionReducer, type V2SessionReduction } from "./server-session-v2-reducer"
@@ -1029,6 +1030,7 @@ export function createServerSession(
       }
       case "message.updated": {
         const info = cleanMessage((event.properties as { info: Message }).info)
+        if (isSyntheticAgentsReminderMessage(info, undefined)) return
         indexLegacyMessage(info)
         const load = messageLoads.get(info.sessionID)
         load?.touchedMessages.add(info.id)
@@ -1098,7 +1100,7 @@ export function createServerSession(
       }
       case "message.part.updated": {
         const part = (event.properties as { part: Part }).part
-        if (SKIP_PARTS.has(part.type)) return
+        if (SKIP_PARTS.has(part.type) || isAgentsReminderPart(part)) return
         const messages = data.message[part.sessionID]
         const load = messageLoads.get(part.sessionID)
         const missing = !messages?.some((message) => message.id === part.messageID)

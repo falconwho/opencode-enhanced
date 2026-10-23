@@ -366,6 +366,44 @@ describe("applyDirectoryEvent", () => {
     expect(store.part.msg_1).toBeUndefined()
   })
 
+  test("ignores synthetic AGENTS reminder messages and parts", () => {
+    const sessionID = "ses_1"
+    const [store, setStore] = createStore(baseState())
+
+    applyDirectoryEvent({
+      event: {
+        type: "message.updated",
+        properties: {
+          info: { ...userMessage("msg_reminder", sessionID), synthetic: true } as unknown as Message,
+        },
+      },
+      store,
+      setStore,
+      push() {},
+      directory: "/tmp",
+      loadLsp() {},
+    })
+    expect(store.message[sessionID]).toBeUndefined()
+
+    applyDirectoryEvent({
+      event: {
+        type: "message.part.updated",
+        properties: {
+          part: {
+            ...textPart("prt_reminder", sessionID, "msg_reminder"),
+            synthetic: true,
+            metadata: { "opencode-enhanced": { kind: "agents-reminder" } },
+          } as Part,
+        },
+      },
+      store,
+      setStore,
+      push() {},
+      directory: "/tmp",
+      loadLsp() {},
+    })
+    expect(store.part.msg_reminder).toBeUndefined()
+  })
   test("upserts and removes messages while clearing orphaned parts", () => {
     const sessionID = "ses_1"
     const [store, setStore] = createStore(

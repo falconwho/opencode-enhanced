@@ -13,7 +13,9 @@ export function isAgentsReminderPart(part: SessionV1.Part): part is SessionV1.Te
 // A system-generated user message used only for model context. It must be
 // ignored anywhere the "last real user message" or a visible user turn matters.
 export function isSyntheticUserMessage(message: SessionV1.WithParts) {
-  if (message.info.role !== "user" || message.parts.length === 0) return false
+  if (message.info.role !== "user") return false
+  if (message.info.synthetic === true) return true
+  if (message.parts.length === 0) return false
   return message.parts.every(isAgentsReminderPart)
 }
 

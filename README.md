@@ -20,6 +20,7 @@ Only the Windows version is released so far, now upgraded to version 1.9. To dow
 ### What's New in 1.9
 
 - **AGENTS reminder cache fix**: reminders are no longer written into older user messages. They are appended as separate synthetic user messages at safe boundaries, preserving the cached history while remaining readable in later turns.
+- **Compaction display fix**: synthetic AGENTS reminder messages stay in model context but are filtered from the app message stream, so long turns continue rendering after context compaction.
 - **Reasoning preview auto-follow**: with reasoning display off, the 5-line preview stays scrolled to the newest reasoning while streaming; scrolling up pauses follow mode.
 
 ### What's New in 1.8

@@ -16,6 +16,7 @@ import { trimSessions } from "./session-trim"
 import { dropSessionCaches } from "./session-cache"
 import { diffs as list, message as clean } from "@/utils/diffs"
 import { messageKey } from "@/utils/session-message"
+import { isAgentsReminderPart, isSyntheticAgentsReminderMessage } from "@/utils/synthetic-user-message"
 
 const SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
 const SESSION_CONTENT_EVENTS = new Set([
@@ -271,6 +272,7 @@ export function applyDirectoryEvent(input: {
     }
     case "message.updated": {
       const info = clean((event.properties as { info: Message }).info)
+      if (isSyntheticAgentsReminderMessage(info, undefined)) break
       const messages = input.store.message[info.sessionID]
       if (!messages) {
         input.setStore("message", info.sessionID, [info])
@@ -312,7 +314,7 @@ export function applyDirectoryEvent(input: {
     }
     case "message.part.updated": {
       const part = (event.properties as { part: Part }).part
-      if (SKIP_PARTS.has(part.type)) break
+      if (SKIP_PARTS.has(part.type) || isAgentsReminderPart(part)) break
       input.setStore(
         produce((draft) => {
           delete draft.part_text_accum_delta[part.id]
