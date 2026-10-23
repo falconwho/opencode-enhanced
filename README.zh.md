@@ -11,11 +11,16 @@
 
 ## 使用方式
 
-目前发布了window版本，现在已经升级1.8版，下载点击 [发布页面](https://github.com/falconwho/opencode-enhanced/releases)
+目前发布了window版本，现在已经升级1.9版，下载点击 [发布页面](https://github.com/falconwho/opencode-enhanced/releases)
 
 - 系统文件和配置参数独立，不影响现有OpenCode运行。
 - 免安装版，解压zip后直接打开里面的 opencode Enhanced.exe 即可使用
 - 界面支持多语言
+
+### 1.9版更新内容
+
+- **AGENTS 提醒缓存优化**：不再修改旧对话消息，改为在安全边界追加独立的 synthetic 用户消息；旧上下文保持不变，提醒会持久化并进入后续上下文。
+- **推理预览自动跟随**：关闭思维链显示时，5 行推理预览会随流式输出自动滚到最新内容；手动上滚时暂停跟随。
 
 ### 1.8版更新内容
 

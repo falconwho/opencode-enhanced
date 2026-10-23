@@ -55,8 +55,9 @@ import { eq } from "drizzle-orm"
 import { SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
-import { AgentsReminder } from "./agents-reminder"
+import { AgentsReminder, type ReminderPlan } from "./agents-reminder"
 import { isContinuationPrompt } from "./continuation"
+import { isSyntheticUserMessage } from "./synthetic-message"
 import { usable } from "./overflow"
 import { Todo } from "./todo"
 import { Memory } from "@/memory"
@@ -1104,6 +1105,7 @@ const layer = Layer.effect(
         const ctx = yield* InstanceState.context
         let structured: unknown
         let step = 0
+        let pendingReminder: ReminderPlan | undefined
         const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
 
         // opencode-enhanced: run the Codex-style memory pipeline in the
@@ -1208,27 +1210,50 @@ const layer = Layer.effect(
             Effect.provideService(Session.Service, sessions),
           )
 
-          // opencode-enhanced: persist AGENTS.md reminders at adaptive context
-          // intervals. Persisted parts keep their position, so the block does
-          // not move and invalidate the cached prefix on every turn.
+          // opencode-enhanced: only append the reminder after completed tool
+          // results. This keeps tool-call pairing intact and leaves the prior
+          // message sequence untouched, so prefix caches remain reusable.
+          const lastMessage = msgs.at(-1)
+          const toolParts =
+            lastMessage?.info.role === "assistant"
+              ? lastMessage.parts.filter((part) => part.type === "tool")
+              : []
+          const atToolBoundary =
+            toolParts.length > 0 &&
+            toolParts.every((part) => part.state.status === "completed" || part.state.status === "error")
+
           const agentsReminderCfg = yield* config.get().pipe(Effect.catch(() => Effect.succeed(undefined)))
           const agentsReminderLimit = usable({
             cfg: agentsReminderCfg ?? {},
             model,
             outputTokenMax: flags.outputTokenMax,
           })
-          yield* AgentsReminder.apply({
-            sessionID,
+          const agentsReminder = yield* AgentsReminder.plan({
             messages: msgs,
             config: agentsReminderCfg,
             usableTokens: agentsReminderLimit,
             instruction,
-            sessions,
           }).pipe(
             Effect.catchCause((cause) =>
               Effect.logError("agents reminder failed", { sessionID, cause: Cause.pretty(cause) }),
             ),
           )
+          const reminder = agentsReminder ?? pendingReminder
+          if (reminder && atToolBoundary) {
+            yield* AgentsReminder.persist({
+              sessionID,
+              messages: msgs,
+              plan: reminder,
+              sessions,
+            }).pipe(
+              Effect.catchCause((cause) =>
+                Effect.logError("agents reminder persist failed", { sessionID, cause: Cause.pretty(cause) }),
+              ),
+            )
+            pendingReminder = undefined
+          } else if (agentsReminder) {
+            pendingReminder = agentsReminder
+          }
 
           const msg: SessionV1.Assistant = {
             id: MessageID.ascending(),
@@ -1266,7 +1291,7 @@ const layer = Layer.effect(
             .pipe(Effect.onInterrupt(() => finalizeInterruptedAssistant))
 
           const outcome: "break" | "continue" = yield* Effect.gen(function* () {
-            const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
+            const lastUserMsg = msgs.findLast((m) => m.info.role === "user" && !isSyntheticUserMessage(m))
             const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
             const promptOps = yield* ops()
 
@@ -1383,6 +1408,59 @@ const layer = Layer.effect(
           if (outcome === "break") break
           continue
         }
+
+        // opencode-enhanced: when a turn has no safe tool-result boundary, the
+        // reminder is persisted after the final assistant message so future
+        // turns can read it without rewriting any existing history.
+        yield* Effect.gen(function* () {
+          const finalMessages = yield* MessageV2.filterCompactedEffect(sessionID).pipe(
+            Effect.provideService(Database.Service, database),
+          )
+          const finalAssistant = MessageV2.latest(finalMessages).assistant
+          if (
+            !finalAssistant?.finish ||
+            ["tool-calls", "unknown"].includes(finalAssistant.finish) ||
+            finalAssistant.error
+          )
+            return
+
+          const finalModel = yield* getModel(
+            finalAssistant.providerID,
+            finalAssistant.modelID,
+            sessionID,
+          ).pipe(Effect.catch(() => Effect.succeed(undefined)))
+          if (!finalModel) return
+
+          const agentsReminderCfg = yield* config.get().pipe(Effect.catch(() => Effect.succeed(undefined)))
+          const agentsReminderLimit = usable({
+            cfg: agentsReminderCfg ?? {},
+            model: finalModel,
+            outputTokenMax: flags.outputTokenMax,
+          })
+          const agentsReminder =
+            pendingReminder ??
+            (yield* AgentsReminder.plan({
+              messages: finalMessages,
+              config: agentsReminderCfg,
+              usableTokens: agentsReminderLimit,
+              instruction,
+            }))
+          if (!agentsReminder) return
+
+          yield* AgentsReminder.persist({
+            sessionID,
+            messages: finalMessages,
+            plan: agentsReminder,
+            sessions,
+          })
+        }).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logError("agents reminder finalization failed", {
+              sessionID,
+              cause: Cause.pretty(cause),
+            }),
+          ),
+        )
 
         yield* compaction.prune({ sessionID }).pipe(Effect.ignore, Effect.forkIn(scope))
         return yield* lastAssistant(sessionID)

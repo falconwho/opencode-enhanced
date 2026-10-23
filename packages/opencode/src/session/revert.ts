@@ -5,6 +5,7 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { Snapshot } from "../snapshot"
 import { Storage } from "@/storage/storage"
 import { Session } from "./session"
+import { isSyntheticUserMessage } from "./synthetic-message"
 import { MessageV2 } from "./message-v2"
 import { SessionID, MessageID, PartID } from "./schema"
 import { SessionRunState } from "./run-state"
@@ -44,7 +45,7 @@ const layer = Layer.effect(
       let rev: Session.Info["revert"]
       const patches: Snapshot.Patch[] = []
       for (const msg of all) {
-        if (msg.info.role === "user") lastUser = msg.info
+        if (msg.info.role === "user" && !isSyntheticUserMessage(msg)) lastUser = msg.info
         const remaining = []
         for (const part of msg.parts) {
           if (rev) {

@@ -1,4 +1,5 @@
-import type { Message, UserMessage } from "@opencode-ai/sdk/v2"
+import type { Message, Part, UserMessage } from "@opencode-ai/sdk/v2"
+import { isSyntheticAgentsReminderMessage } from "@/utils/synthetic-user-message"
 import { createMemo, createResource, onCleanup, untrack, type Accessor } from "solid-js"
 import { useServerSync } from "@/context/server-sync"
 import { useSync } from "@/context/sync"
@@ -47,7 +48,11 @@ export function createTimelineModel(input: {
     const id = input.sessionID()
     return !id || isTimelineReady(sync().data.message[id], serverSync().session.history.loading(id))
   })
-  const userMessages = createMemo(() => selectUserMessages(messages()), emptyUserMessages, { equals: same })
+  const userMessages = createMemo(
+    () => selectUserMessages(messages(), (id) => sync().data.part[id]),
+    emptyUserMessages,
+    { equals: same },
+  )
   const visibleUserMessages = createMemo(
     () => {
       return selectVisibleUserMessages(userMessages(), input.revertMessageID())
@@ -94,8 +99,11 @@ export function createTimelineModel(input: {
   }
 }
 
-export function selectUserMessages(messages: Message[]) {
-  return messages.filter((message): message is UserMessage => message.role === "user")
+export function selectUserMessages(messages: Message[], parts?: (id: string) => Part[] | undefined) {
+  return messages.filter(
+    (message): message is UserMessage =>
+      message.role === "user" && !(parts && isSyntheticAgentsReminderMessage(message, parts(message.id))),
+  )
 }
 
 export function isTimelineReady(messages: Message[] | undefined, loading: boolean) {

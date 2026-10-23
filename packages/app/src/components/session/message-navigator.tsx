@@ -2,6 +2,7 @@ import { createMemo, For, Show } from "solid-js"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { useLanguage } from "@/context/language"
 import { useSync } from "@/context/sync"
+import { isSyntheticAgentsReminderMessage } from "@/utils/synthetic-user-message"
 
 // opencode-enhanced F6: floating quick navigator for the user's own messages.
 // Sits at the left edge of the conversation; hover previews a message, click
@@ -15,7 +16,7 @@ export function SessionMessageNavigator(props: { sessionID?: string; onJump?: (m
     const id = props.sessionID
     if (!id) return []
     return (sync().data.message[id] ?? [])
-      .filter((message) => message.role === "user")
+      .filter((message) => message.role === "user" && !isSyntheticAgentsReminderMessage(message, sync().data.part[message.id]))
       .slice()
       .sort((a, b) => a.time.created - b.time.created || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .map((message) => {

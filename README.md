@@ -11,11 +11,16 @@ This is the harness I use every day. Every feature in it was refined over and ov
 
 ## How to Use
 
-Only the Windows version is released so far, now upgraded to version 1.8. To download, see the [Releases page](https://github.com/falconwho/opencode-enhanced/releases).
+Only the Windows version is released so far, now upgraded to version 1.9. To download, see the [Releases page](https://github.com/falconwho/opencode-enhanced/releases).
 
 - System files and configuration are fully isolated, so your existing OpenCode installation is not affected.
 - Portable edition: unzip the archive and open `opencode Enhanced.exe` inside to start using it.
 - The interface supports multiple languages.
+
+### What's New in 1.9
+
+- **AGENTS reminder cache fix**: reminders are no longer written into older user messages. They are appended as separate synthetic user messages at safe boundaries, preserving the cached history while remaining readable in later turns.
+- **Reasoning preview auto-follow**: with reasoning display off, the 5-line preview stays scrolled to the newest reasoning while streaming; scrolling up pauses follow mode.
 
 ### What's New in 1.8
 

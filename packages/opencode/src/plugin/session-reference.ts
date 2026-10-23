@@ -1,4 +1,6 @@
 import type { Plugin } from "@opencode-ai/plugin"
+import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { isSyntheticUserMessage } from "@/session/synthetic-message"
 
 // opencode-enhanced F5: expand session references in the outgoing user
 // message into a digest of the referenced session (title + recent messages).
@@ -46,7 +48,7 @@ export const SessionReferencePlugin: Plugin = async ({ client }) => {
 
   return {
     "experimental.chat.messages.transform": async (_input, output) => {
-      const last = [...output.messages].reverse().find((message) => message.info.role === "user")
+      const last = [...output.messages].reverse().find((message) => message.info.role === "user" && !isSyntheticUserMessage(message as unknown as SessionV1.WithParts))
       if (!last) return
       for (const part of last.parts) {
         if (part.type !== "text") continue

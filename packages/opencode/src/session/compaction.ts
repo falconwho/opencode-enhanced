@@ -1,5 +1,6 @@
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { isSyntheticUserMessage } from "./synthetic-message"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { Session } from "./session"
 import { SessionID, MessageID, PartID } from "./schema"
@@ -123,7 +124,7 @@ function turns(messages: SessionV1.WithParts[]) {
   const result: Turn[] = []
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]
-    if (msg.info.role !== "user") continue
+    if (msg.info.role !== "user" || isSyntheticUserMessage(msg)) continue
     if (msg.parts.some((part) => part.type === "compaction")) continue
     result.push({
       start: i,

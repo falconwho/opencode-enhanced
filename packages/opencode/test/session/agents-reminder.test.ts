@@ -9,6 +9,8 @@ import {
   contextTokens,
   dueThresholds,
 } from "../../src/session/agents-reminder"
+import { isSyntheticUserMessage } from "../../src/session/synthetic-message"
+import { MessageV2 } from "../../src/session/message-v2"
 
 const tokens = (used: number) => ({
   input: used,
@@ -17,27 +19,35 @@ const tokens = (used: number) => ({
   cache: { read: 0, write: 0 },
 })
 
-function userMessage() {
+function userMessage(id = "msg_user", sessionID = "ses_test") {
   return {
     info: {
-      id: "msg_user",
-      sessionID: "ses_test",
+      id,
+      sessionID,
       role: "user",
-      time: { created: 0 },
+      time: { created: 1 },
       agent: "build",
       model: { providerID: "test", modelID: "test" },
     },
-    parts: [],
+    parts: [
+      {
+        id: `${id}_part`,
+        messageID: id,
+        sessionID,
+        type: "text",
+        text: "real user input",
+      },
+    ],
   } as unknown as SessionV1.WithParts
 }
 
-function assistantMessage(used: number) {
+function assistantMessage(used: number, id = "msg_assistant") {
   return {
     info: {
-      id: "msg_assistant",
+      id,
       sessionID: "ses_test",
       role: "assistant",
-      time: { created: 0 },
+      time: { created: 2 },
       tokens: tokens(used),
     },
     parts: [],
@@ -45,15 +55,20 @@ function assistantMessage(used: number) {
 }
 
 function harness() {
-  const updates: SessionV1.Part[] = []
+  const messages: SessionV1.User[] = []
+  const parts: SessionV1.Part[] = []
   const sessions = {
+    updateMessage: (message: SessionV1.User) =>
+      Effect.sync(() => {
+        messages.push(message)
+      }),
     updatePart: (part: SessionV1.Part) =>
       Effect.sync(() => {
-        updates.push(part)
+        parts.push(part)
       }),
   }
   const instruction = { reminder: () => Effect.succeed(["<system-reminder>\nINSTRUCTIONS\n</system-reminder>"]) }
-  return { updates, sessions, instruction }
+  return { messages, parts, sessions, instruction }
 }
 
 describe("agents reminder thresholds", () => {
@@ -81,86 +96,88 @@ describe("agents reminder thresholds", () => {
   })
 })
 
-describe("AgentsReminder.apply", () => {
+describe("AgentsReminder.plan and persist", () => {
   test("does nothing below the first threshold", async () => {
-    const { updates, sessions, instruction } = harness()
+    const { instruction } = harness()
     const messages = [userMessage(), assistantMessage(10_000)]
-    await Effect.runPromise(
-      AgentsReminder.apply({
-        sessionID: "ses_test" as never,
-        messages,
-        config: {},
-        usableTokens: 1_000_000,
-        instruction,
-        sessions,
-      }),
+    const plan = await Effect.runPromise(
+      AgentsReminder.plan({ messages, config: {}, usableTokens: 1_000_000, instruction }),
     )
-    expect(updates).toEqual([])
+    expect(plan).toBeUndefined()
   })
 
-  test("persists a synthetic reminder and never repeats a threshold", async () => {
-    const { updates, sessions, instruction } = harness()
+  test("persists a new synthetic message without changing the real user message", async () => {
+    const { messages: persisted, parts, sessions, instruction } = harness()
     const messages = [userMessage(), assistantMessage(160_000)]
-    const run = () =>
-      Effect.runPromise(
-        AgentsReminder.apply({
-          sessionID: "ses_test" as never,
-          messages,
-          config: {},
-          usableTokens: 1_000_000,
-          instruction,
-          sessions,
-        }),
-      )
 
-    await run()
-    expect(updates).toHaveLength(1)
-    const part = updates[0] as SessionV1.TextPart
-    expect(part.type).toBe("text")
-    expect(part.synthetic).toBe(true)
-    expect(part.text).toContain("INSTRUCTIONS")
-    const marker = (part.metadata as Record<string, unknown>)[AGENTS_REMINDER_METADATA_KEY] as {
-      kind: string
-      thresholds: number[]
-    }
-    expect(marker.kind).toBe("agents-reminder")
-    expect(marker.thresholds).toEqual([150_000])
+    const plan = await Effect.runPromise(
+      AgentsReminder.plan({ messages, config: {}, usableTokens: 1_000_000, instruction }),
+    )
+    expect(plan?.thresholds).toEqual([150_000])
 
-    await run()
-    expect(updates).toHaveLength(1)
-
-    messages.push(assistantMessage(310_000))
-    await run()
-    expect(updates).toHaveLength(2)
-    const next = (updates[1] as SessionV1.TextPart).metadata as Record<string, unknown>
-    expect((next[AGENTS_REMINDER_METADATA_KEY] as { thresholds: number[] }).thresholds).toEqual([300_000])
-  })
-
-  test("does nothing when the reminder is disabled or empty", async () => {
-    const messages = [userMessage(), assistantMessage(160_000)]
-    const { updates, sessions, instruction } = harness()
     await Effect.runPromise(
-      AgentsReminder.apply({
-        sessionID: "ses_test" as never,
+      AgentsReminder.persist({ sessionID: "ses_test" as never, messages, plan: plan!, sessions }),
+    )
+
+    expect(persisted).toHaveLength(1)
+    expect(parts).toHaveLength(1)
+    expect(messages).toHaveLength(3)
+    expect(messages[0]?.parts).toHaveLength(1)
+    expect(messages[0]?.parts[0]).toMatchObject({ type: "text", text: "real user input" })
+
+    const created = messages[2]!
+    expect(created.info.role).toBe("user")
+    expect(isSyntheticUserMessage(created)).toBe(true)
+    expect(created.parts[0]).toMatchObject({
+      type: "text",
+      synthetic: true,
+      metadata: {
+        [AGENTS_REMINDER_METADATA_KEY]: {
+          kind: "agents-reminder",
+          thresholds: [150_000],
+        },
+      },
+    })
+
+    const again = await Effect.runPromise(
+      AgentsReminder.plan({ messages, config: {}, usableTokens: 1_000_000, instruction }),
+    )
+    expect(again).toBeUndefined()
+  })
+
+  test("latest ignores synthetic reminder user messages", async () => {
+    const { sessions, instruction } = harness()
+    const messages = [userMessage(), assistantMessage(160_000)]
+    const plan = await Effect.runPromise(
+      AgentsReminder.plan({ messages, config: {}, usableTokens: 1_000_000, instruction }),
+    )
+    await Effect.runPromise(
+      AgentsReminder.persist({ sessionID: "ses_test" as never, messages, plan: plan!, sessions }),
+    )
+
+    expect(String(MessageV2.latest(messages).user?.id)).toBe("msg_user")
+  })
+  test("does nothing when the reminder is disabled or empty", async () => {
+    const { instruction } = harness()
+    const messages = [userMessage(), assistantMessage(160_000)]
+    const disabled = await Effect.runPromise(
+      AgentsReminder.plan({
         messages,
         config: { experimental: { agents_tail_reminder: false } },
         usableTokens: 1_000_000,
         instruction,
-        sessions,
       }),
     )
-    expect(updates).toEqual([])
+    expect(disabled).toBeUndefined()
 
-    await Effect.runPromise(
-      AgentsReminder.apply({
-        sessionID: "ses_test" as never,
+    const empty = await Effect.runPromise(
+      AgentsReminder.plan({
         messages,
         config: {},
         usableTokens: 1_000_000,
         instruction: { reminder: () => Effect.succeed([]) },
-        sessions,
       }),
     )
-    expect(updates).toEqual([])
+    expect(empty).toBeUndefined()
   })
 })

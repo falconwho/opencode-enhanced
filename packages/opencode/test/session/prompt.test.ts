@@ -33,6 +33,7 @@ import { FSUtil } from "@opencode-ai/core/fs-util"
 import { SessionCompaction } from "../../src/session/compaction"
 import { SessionSummary } from "../../src/session/summary"
 import { AGENTS_REMINDER_METADATA_KEY } from "../../src/session/agents-reminder"
+import { isSyntheticUserMessage } from "../../src/session/synthetic-message"
 import { Instruction } from "../../src/session/instruction"
 import { SessionProcessor } from "../../src/session/processor"
 import { SessionPrompt } from "../../src/session/prompt"
@@ -2638,7 +2639,7 @@ noLLMServer.instance(
   30_000,
 )
 
-it.instance("persists AGENTS instructions once the context crosses a threshold", () =>
+it.instance("persists AGENTS instructions as a synthetic message after the turn", () =>
   Effect.gen(function* () {
     const { directory } = yield* TestInstance
     const { llm } = yield* useServerConfig(providerCfg)
@@ -2647,39 +2648,71 @@ it.instance("persists AGENTS instructions once the context crosses a threshold",
     const sessions = yield* Session.Service
     const chat = yield* sessions.create({ title: "Tail reminder" })
     const previous = yield* user(chat.id, "previous turn")
-    yield* assistantWithTokens(chat.id, previous.id, 160_000)
+    yield* assistantWithTokens(chat.id, previous.id, 45_000)
     yield* llm.text("done")
     yield* user(chat.id, "hello there")
     yield* prompt.loop({ sessionID: chat.id })
 
-    const hits = yield* llm.hits
-    const request = hits
-      .map((hit) => hit.body as { messages?: Array<{ role?: string; content?: unknown }> })
-      .find(
-        (body) =>
-          JSON.stringify(body.messages ?? []).includes("hello there") &&
-          !JSON.stringify(body).includes("Generate a title"),
-      )
-    const lastUser = request?.messages?.filter((message) => message.role === "user").at(-1)
-    const content = JSON.stringify(lastUser)
-    // opencode-enhanced: once the context crosses a threshold the reminder is
-    // persisted on the newest user message and never joins the cached prefix.
-    expect(content).toContain("The following project instructions were provided earlier")
-    expect(content).toContain("# Tail marker instructions")
-    expect(content.indexOf("hello there")).toBeLessThan(
-      content.indexOf("The following project instructions were provided earlier"),
+    const persisted = yield* sessions.messages({ sessionID: chat.id })
+    const original = persisted.find((message) =>
+      message.parts.some((part) => part.type === "text" && part.text === "hello there"),
     )
+    expect(original?.parts.filter((part) => part.type === "text").map((part) => part.text)).toEqual([
+      "hello there",
+    ])
+
+    const reminders = persisted.filter(isSyntheticUserMessage)
+    expect(reminders).toHaveLength(1)
+    const reminder = reminders[0]!
+    expect(reminder.info.role).toBe("user")
+    const text = reminder.parts.find((part) => part.type === "text")
+    expect(text?.type).toBe("text")
+    if (text?.type === "text") {
+      expect(text.text).toContain("The following project instructions were provided earlier")
+      expect(text.text).toContain("# Tail marker instructions")
+      expect(text.metadata?.[AGENTS_REMINDER_METADATA_KEY]).toMatchObject({
+        kind: "agents-reminder",
+        thresholds: [40_000],
+      })
+    }
+    expect(persisted.at(-1)?.info.id).toBe(reminder.info.id)
+  }),
+)
+it.instance("appends the AGENTS reminder after completed tool results", () =>
+  Effect.gen(function* () {
+    const { dir, llm } = yield* useServerConfig(providerCfg)
+    const { directory } = yield* TestInstance
+    yield* writeText(path.join(directory, "AGENTS.md"), "# Tool marker instructions")
+    yield* writeText(path.join(dir, "probe.txt"), "probe")
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({
+      title: "Tool reminder",
+      permission: [{ permission: "*", pattern: "*", action: "allow" }],
+    })
+    const previous = yield* user(chat.id, "previous turn")
+    yield* assistantWithTokens(chat.id, previous.id, 45_000)
+    yield* llm.tool("glob", { pattern: "**/*.txt" })
+    yield* llm.text("done")
+    yield* user(chat.id, "find files")
+    yield* prompt.loop({ sessionID: chat.id })
 
     const persisted = yield* sessions.messages({ sessionID: chat.id })
-    const reminders = persisted
-      .flatMap((message) => message.parts)
-      .filter(
-        (part) =>
-          part.type === "text" &&
-          part.synthetic &&
-          (part.metadata as Record<string, unknown> | undefined)?.[AGENTS_REMINDER_METADATA_KEY],
-      )
+    const reminders = persisted.filter(isSyntheticUserMessage)
     expect(reminders).toHaveLength(1)
+
+    const original = persisted.find((message) =>
+      message.parts.some((part) => part.type === "text" && part.text === "find files"),
+    )
+    expect(original?.parts.filter((part) => part.type === "text").map((part) => part.text)).toEqual([
+      "find files",
+    ])
+    const reminderIndex = persisted.findIndex((message) => message.info.id === reminders[0]!.info.id)
+    const finalAssistantIndex = persisted.findLastIndex(
+      (message) => message.info.role === "assistant" && message.info.finish === "stop",
+    )
+    expect(reminderIndex).toBeGreaterThan(-1)
+    expect(reminderIndex).toBeLessThan(finalAssistantIndex)
   }),
 )
 it.instance("honors the agents tail reminder toggle", () =>
@@ -2694,7 +2727,7 @@ it.instance("honors the agents tail reminder toggle", () =>
     const sessions = yield* Session.Service
     const chat = yield* sessions.create({ title: "Tail reminder off" })
     const previous = yield* user(chat.id, "previous turn")
-    yield* assistantWithTokens(chat.id, previous.id, 160_000)
+    yield* assistantWithTokens(chat.id, previous.id, 45_000)
     yield* llm.text("done")
     yield* user(chat.id, "hello there")
     yield* prompt.loop({ sessionID: chat.id })
@@ -2709,5 +2742,8 @@ it.instance("honors the agents tail reminder toggle", () =>
       )
     const lastUser = request?.messages?.filter((message) => message.role === "user").at(-1)
     expect(JSON.stringify(lastUser)).not.toContain("The following project instructions were provided earlier")
+
+    const persisted = yield* sessions.messages({ sessionID: chat.id })
+    expect(persisted.filter(isSyntheticUserMessage)).toHaveLength(0)
   }),
 )

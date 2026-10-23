@@ -1,20 +1,32 @@
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { Effect } from "effect"
-import { PartID, SessionID } from "./schema"
+import { MessageID, PartID, SessionID } from "./schema"
+import {
+  AGENTS_REMINDER_METADATA_KEY,
+  isAgentsReminderPart,
+  isSyntheticUserMessage,
+} from "./synthetic-message"
 
-// opencode-enhanced: AGENTS.md reminders are persisted at adaptive context
-// intervals. Persisting the block keeps its position fixed, so it does not move
-// (and invalidate the prompt cache) on every turn.
+// opencode-enhanced: AGENTS.md reminders are persistent synthetic user
+// messages appended at safe turn boundaries. The historical message sequence is
+// never modified, so provider prefix caches stay valid.
 
 export const AGENTS_REMINDER_INTERVAL_MIN = 40_000
 export const AGENTS_REMINDER_INTERVAL_MAX = 150_000
 export const AGENTS_REMINDER_INTERVAL_RATIO = 0.15
 export const AGENTS_REMINDER_CEILING_RATIO = 0.8
-export const AGENTS_REMINDER_METADATA_KEY = "opencode-enhanced"
 
 type MemoryConfig = { experimental?: { agents_tail_reminder?: boolean } }
 type InstructionLike = { reminder: () => Effect.Effect<string[], unknown> }
-type SessionsLike = { updatePart: (part: SessionV1.Part) => Effect.Effect<unknown, unknown> }
+type SessionsLike = {
+  updateMessage: (message: SessionV1.User) => Effect.Effect<unknown, unknown>
+  updatePart: (part: SessionV1.Part) => Effect.Effect<unknown, unknown>
+}
+
+export type ReminderPlan = {
+  text: string
+  thresholds: number[]
+}
 
 function roundUpTenThousand(value: number) {
   return Math.ceil(value / 10_000) * 10_000
@@ -48,12 +60,11 @@ function coveredThresholds(messages: SessionV1.WithParts[]) {
   const covered = new Set<number>()
   for (const message of messages) {
     for (const part of message.parts) {
-      if (part.type !== "text" || !part.synthetic) continue
+      if (!isAgentsReminderPart(part)) continue
       const marker = (part.metadata as Record<string, unknown> | undefined)?.[AGENTS_REMINDER_METADATA_KEY] as
-        | { kind?: string; thresholds?: unknown }
+        | { thresholds?: unknown }
         | undefined
-      if (marker?.kind !== "agents-reminder") continue
-      if (!Array.isArray(marker.thresholds)) continue
+      if (!Array.isArray(marker?.thresholds)) continue
       for (const value of marker.thresholds) {
         if (typeof value === "number") covered.add(value)
       }
@@ -62,13 +73,11 @@ function coveredThresholds(messages: SessionV1.WithParts[]) {
   return covered
 }
 
-export const apply = Effect.fn("AgentsReminder.apply")(function* (input: {
-  sessionID: SessionID
+export const plan = Effect.fn("AgentsReminder.plan")(function* (input: {
   messages: SessionV1.WithParts[]
   config: MemoryConfig | undefined
   usableTokens: number
   instruction: InstructionLike
-  sessions: SessionsLike
 }) {
   if (input.config?.experimental?.agents_tail_reminder === false) return
 
@@ -86,23 +95,52 @@ export const apply = Effect.fn("AgentsReminder.apply")(function* (input: {
   const text = reminder.join("\n\n").trim()
   if (!text) return
 
-  const target = input.messages.findLast((message) => message.info.role === "user")
-  if (!target) return
-
-  const part = {
-    id: PartID.ascending(),
-    messageID: target.info.id,
-    sessionID: input.sessionID,
-    type: "text" as const,
-    text,
-    synthetic: true,
-    metadata: {
-      [AGENTS_REMINDER_METADATA_KEY]: { kind: "agents-reminder", thresholds: due },
-    },
-  }
-  target.parts.push(part)
-  yield* input.sessions.updatePart(part).pipe(Effect.ignore)
-  yield* Effect.logInfo("agents reminder injected", { sessionID: input.sessionID, thresholds: due })
+  return { text, thresholds: due } satisfies ReminderPlan
 })
 
+export const persist = Effect.fn("AgentsReminder.persist")(function* (input: {
+  sessionID: SessionID
+  messages: SessionV1.WithParts[]
+  plan: ReminderPlan
+  sessions: SessionsLike
+}) {
+  const target = input.messages.findLast(
+    (message) => message.info.role === "user" && !isSyntheticUserMessage(message),
+  )
+  if (!target || target.info.role !== "user") return
+
+  const info: SessionV1.User = {
+    id: MessageID.ascending(),
+    sessionID: input.sessionID,
+    role: "user",
+    time: { created: Date.now() },
+    agent: target.info.agent,
+    model: { ...target.info.model },
+  }
+  const part: SessionV1.TextPart = {
+    id: PartID.ascending(),
+    messageID: info.id,
+    sessionID: input.sessionID,
+    type: "text",
+    text: input.plan.text,
+    synthetic: true,
+    metadata: {
+      [AGENTS_REMINDER_METADATA_KEY]: {
+        kind: "agents-reminder",
+        thresholds: input.plan.thresholds,
+      },
+    },
+  }
+
+  yield* input.sessions.updateMessage(info)
+  yield* input.sessions.updatePart(part)
+  input.messages.push({ info, parts: [part] })
+  yield* Effect.logInfo("agents reminder injected", {
+    sessionID: input.sessionID,
+    thresholds: input.plan.thresholds,
+  })
+  return info
+})
+
+export { AGENTS_REMINDER_METADATA_KEY } from "./synthetic-message"
 export * as AgentsReminder from "./agents-reminder"

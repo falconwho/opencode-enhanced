@@ -8,6 +8,7 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 import { PartID } from "./schema"
 import { MessageV2 } from "./message-v2"
 import { Session } from "./session"
+import { isSyntheticUserMessage } from "./synthetic-message"
 import PROMPT_PLAN from "./prompt/plan.txt"
 import BUILD_SWITCH from "./prompt/build-switch.txt"
 import PLAN_MODE from "./prompt/plan-mode.txt"
@@ -20,7 +21,7 @@ export const apply = Effect.fn("SessionReminders.apply")(function* (input: {
   const flags = yield* RuntimeFlags.Service
   const fsys = yield* FSUtil.Service
   const sessions = yield* Session.Service
-  const userMessage = input.messages.findLast((msg) => msg.info.role === "user")
+  const userMessage = input.messages.findLast((msg) => msg.info.role === "user" && !isSyntheticUserMessage(msg))
   if (!userMessage) return input.messages
 
   if (!flags.experimentalPlanMode) {

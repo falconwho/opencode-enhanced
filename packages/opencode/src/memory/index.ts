@@ -13,6 +13,7 @@ import { Provider } from "@/provider/provider"
 import { LLM } from "@/session/llm"
 import { Session } from "@/session/session"
 import { MessageID, SessionID } from "@/session/schema"
+import { isSyntheticUserMessage } from "@/session/synthetic-message"
 import READ_PATH from "./read-path.txt"
 import {
   ROLLOUT_MAX_BYTES,
@@ -255,7 +256,7 @@ const layer = Layer.effect(
       const messages = yield* sessions.messages({ sessionID, limit: 300 }).pipe(
         Effect.catch(() => Effect.succeed([] as SessionV1.WithParts[])),
       )
-      const lastUser = messages.findLast((message) => message.info.role === "user")
+      const lastUser = messages.findLast((message) => message.info.role === "user" && !isSyntheticUserMessage(message))
       if (!lastUser) return
 
       const state = yield* Effect.tryPromise(() => readState(memoryRoot())).pipe(

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type { AssistantMessage, Message, UserMessage } from "@opencode-ai/sdk/v2"
+import type { AssistantMessage, Message, Part, UserMessage } from "@opencode-ai/sdk/v2"
 import { isTimelineReady, loadOlderTimeline, selectUserMessages, selectVisibleUserMessages } from "./model"
 
 const user = (id: string) => ({ id, role: "user", time: { created: Number(id.at(-1)) } }) as UserMessage
@@ -15,6 +15,29 @@ describe("timeline model", () => {
     expect(selectVisibleUserMessages(users)).toBe(users)
   })
 
+  test("filters synthetic AGENTS reminder messages", () => {
+    const messages: Message[] = [user("msg_r"), user("msg_s"), assistant("msg_a")]
+    const parts = new Map<string, Part[]>([
+      [
+        "msg_s",
+        [
+          {
+            id: "part_s",
+            messageID: "msg_s",
+            sessionID: "ses_test",
+            type: "text",
+            text: "reminder",
+            synthetic: true,
+            metadata: { "opencode-enhanced": { kind: "agents-reminder" } },
+          },
+        ],
+      ],
+    ])
+
+    expect(selectUserMessages(messages, (id) => parts.get(id)).map((message) => message.id)).toEqual([
+      "msg_r",
+    ])
+  })
   test("waits for an assistant-only load to hydrate its user root", () => {
     expect(isTimelineReady([assistant("msg_2")], true)).toBe(false)
     expect(isTimelineReady([user("msg_1"), assistant("msg_2")], true)).toBe(true)
