@@ -21,14 +21,8 @@ Only the Windows version is released so far, now upgraded to version 1.9. To dow
 
 - **AGENTS reminder cache fix**: reminders are no longer written into older user messages. They are appended as separate synthetic user messages at safe boundaries, preserving the cached history while remaining readable in later turns.
 - **Compaction display fix**: synthetic AGENTS reminder messages stay in model context but are filtered from the app message stream, so long turns continue rendering after context compaction.
+- **To-do list lifecycle fix**: a new task clears the previous task's to-do list; an explicit continuation command keeps unfinished progress unchanged.
 - **Reasoning preview auto-follow**: with reasoning display off, the 5-line preview stays scrolled to the newest reasoning while streaming; scrolling up pauses follow mode.
-
-### What's New in 1.8
-
-- **Todo list display fix**: Fixed the upstream bug where a completed todo list from an old task reappeared in new messages; a new todo list is created when the task list changes.
-- **AGENTS attention reinforcement logic adjustment**: The insertion interval for global instructions is now calculated automatically from the model's maximum context limit, adapting to more models.
-- **Reasoning preview auto-follow**: With reasoning display off, the 5-line preview now stays scrolled to the newest reasoning while streaming; scrolling up pauses auto-follow.
-- This version makes significant data-structure changes; users coming from before 1.7 should back up the "OpenCode Enhanced" database before use.
 
 ## The Classic UI Is Back!
 
@@ -54,6 +48,7 @@ Not used to OpenCode's new interface? This project brings the classic UI back! P
 | 📇 **Memory Module** | Envious of Codex's memory system? Now you can use one in OpenCode too! The context structure is optimized for the memory system, improving cache hit rates and speeding up cache cold prefill for locally deployed AI models. |
 | 🗨️ **Ask Questions in Build Mode** | When enabled, the model can also ask you questions in Build mode, reducing the chance that plans go off track under vague instructions. |
 | 🛡️ **AGENTS Attention Reinforcement** | Inserts AGENTS.md reminders at adaptive intervals based on the model's usable context, avoiding insertions near the compaction threshold while improving cache hit rates. |
+| 📜 **To-do List Fix** | Fixed the upstream bug where a new conversation still showed the previous conversation's to-do list; the current conversation's to-do list and progress are rebuilt. |
 
 > The AI approval and memory model and their reasoning effort can be changed in Settings. Both the official OpenCode plan and third-party model providers are supported directly, with no extra API configuration. On first launch, the default is DeepSeek V4.1 Flash from the OpenCode Go plan, with reasoning effort set to low.
 
