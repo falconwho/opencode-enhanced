@@ -11,18 +11,16 @@ This is the harness I use every day. Every feature in it was refined over and ov
 
 ## How to Use
 
-Only the Windows version is released so far, now upgraded to version 1.9. To download, see the [Releases page](https://github.com/falconwho/opencode-enhanced/releases).
+Only the Windows version is released so far, now upgraded to version 1.10. To download, see the [Releases page](https://github.com/falconwho/opencode-enhanced/releases).
 
 - System files and configuration are fully isolated, so your existing OpenCode installation is not affected.
 - Portable edition: unzip the archive and open `opencode Enhanced.exe` inside to start using it.
 - The interface supports multiple languages.
 
-### What's New in 1.9
+### What's New in 1.10
 
-- **AGENTS reminder cache fix**: reminders are no longer written into older user messages. They are appended as separate synthetic user messages at safe boundaries, preserving the cached history while remaining readable in later turns.
-- **Compaction display fix**: synthetic AGENTS reminder messages stay in model context but are filtered from the app message stream, so long turns continue rendering after context compaction.
-- **To-do list lifecycle fix**: a new task clears the previous task's to-do list; an explicit continuation command keeps unfinished progress unchanged.
-- **Reasoning preview auto-follow**: with reasoning display off, the 5-line preview stays scrolled to the newest reasoning while streaming; scrolling up pauses follow mode.
+- **Halogen cache isolation**: title, approval, memory, and compaction side requests are marked `no_store`, so they no longer write to or evict the main conversation's prompt cache.
+- **Stable Halogen session resume**: root sessions send `X-Halogen-Keep` / `X-Halogen-From`, preserving the reply-end resume point across turns instead of competing with automatic keep slots.
 
 ## The Classic UI Is Back!
 
