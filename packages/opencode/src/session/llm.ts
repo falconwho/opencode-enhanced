@@ -42,6 +42,7 @@ export type StreamInput = {
   system: string[]
   messages: ModelMessage[]
   small?: boolean
+  noStore?: boolean
   tools: Record<string, Tool>
   retries?: number
   toolChoice?: "auto" | "required" | "none"

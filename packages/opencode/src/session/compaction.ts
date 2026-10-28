@@ -428,6 +428,7 @@ const layer = Layer.effect(
         agent,
         sessionID: input.sessionID,
         tools: {},
+        noStore: true,
         system: [],
         messages: [
           {

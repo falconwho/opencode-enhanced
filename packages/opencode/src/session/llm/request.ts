@@ -27,6 +27,7 @@ type PrepareInput = {
   readonly system: string[]
   readonly messages: ModelMessage[]
   readonly small?: boolean
+  readonly noStore?: boolean
   readonly tools: Record<string, Tool>
   readonly provider: Provider.Info
   readonly auth: Auth.Info | undefined
@@ -89,6 +90,11 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
         providerOptions: input.provider.options,
       })
   const options = mergeOptions(mergeOptions(mergeOptions(base, input.model.options), input.agent.options), variant)
+  const isHalogen =
+    input.model.providerID === "halogen" && input.model.api.npm === "@ai-sdk/openai-compatible"
+  if (isHalogen && (input.small || input.noStore)) {
+    options.prompt_cache_policy = "no_store"
+  }
   if (
     input.model.api.npm === "@ai-sdk/azure" &&
     (input.provider.options.useCompletionUrls || input.model.options.useCompletionUrls || options.useCompletionUrls)
@@ -178,6 +184,16 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
     ? (yield* InstanceState.context).project.id
     : undefined
 
+  const keepName = `opencode-${input.sessionID}`
+  const hasPriorUser = input.messages.filter((message) => message.role === "user").length > 1
+  const cacheHeaders =
+    isHalogen && !input.small && !input.noStore && !input.parentSessionID
+      ? {
+          "X-Halogen-Keep": keepName,
+          ...(hasPriorUser ? { "X-Halogen-From": keepName } : {}),
+        }
+      : {}
+
   return {
     system,
     messages,
@@ -203,6 +219,7 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
       ...(input.parentSessionID ? { "x-parent-session-id": input.parentSessionID } : {}),
       ...input.model.headers,
       ...headers,
+      ...cacheHeaders,
     },
   }
 })
