@@ -38,6 +38,37 @@ describe("timeline model", () => {
       "msg_r",
     ])
   })
+  test("keeps a real user message that contains a synthetic date part", () => {
+    const messages: Message[] = [user("msg_d"), assistant("msg_a")]
+    const parts = new Map<string, Part[]>([
+      [
+        "msg_d",
+        [
+          {
+            id: "part_d",
+            messageID: "msg_d",
+            sessionID: "ses_test",
+            type: "text",
+            text: "real input",
+          },
+          {
+            id: "part_d_date",
+            messageID: "msg_d",
+            sessionID: "ses_test",
+            type: "text",
+            text: "<system-reminder>\nCurrent date: Thu Oct 29 2026\n</system-reminder>",
+            synthetic: true,
+            metadata: { "opencode-enhanced": { kind: "current-date", date: "Thu Oct 29 2026" } },
+          },
+        ],
+      ],
+    ])
+
+    expect(selectUserMessages(messages, (id) => parts.get(id)).map((message) => message.id)).toEqual([
+      "msg_d",
+    ])
+  })
+
   test("waits for an assistant-only load to hydrate its user root", () => {
     expect(isTimelineReady([assistant("msg_2")], true)).toBe(false)
     expect(isTimelineReady([user("msg_1"), assistant("msg_2")], true)).toBe(true)

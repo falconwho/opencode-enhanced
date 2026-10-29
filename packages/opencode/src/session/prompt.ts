@@ -53,6 +53,7 @@ import { ModelV2 } from "@opencode-ai/core/model"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { eq } from "drizzle-orm"
 import { SessionTable } from "@opencode-ai/core/session/sql"
+import { SessionDate } from "./date-reminder"
 import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
 import { AgentsReminder, type ReminderPlan } from "./agents-reminder"
@@ -1204,6 +1205,7 @@ const layer = Layer.effect(
           }
           const maxSteps = agent.steps ?? Infinity
           const isLastStep = step >= maxSteps
+          msgs = yield* SessionDate.apply({ messages: msgs, sessions })
           msgs = yield* SessionReminders.apply({ messages: msgs, agent, session }).pipe(
             Effect.provideService(RuntimeFlags.Service, flags),
             Effect.provideService(FSUtil.Service, fsys),

@@ -11,16 +11,18 @@ This is the harness I use every day. Every feature in it was refined over and ov
 
 ## How to Use
 
-Only the Windows version is released so far, now upgraded to version 1.10. To download, see the [Releases page](https://github.com/falconwho/opencode-enhanced/releases).
+Only the Windows version is released so far, now upgraded to version 1.11. To download, see the [Releases page](https://github.com/falconwho/opencode-enhanced/releases).
 
 - System files and configuration are fully isolated, so your existing OpenCode installation is not affected.
 - Portable edition: unzip the archive and open `opencode Enhanced.exe` inside to start using it.
 - The interface supports multiple languages.
 
-### What's New in 1.10
+### What's New in 1.11
 
+- **Stable prompt prefixes**: the current date is no longer embedded in the stable system prompt. It is persisted as a synthetic reminder on the current user message only when the date changes. Plan/Build reminders are now persisted and idempotent, so existing history is never rewritten. This reduces cross-day and after-idle prompt-cache misses.
 - **Halogen cache isolation**: title, approval, memory, and compaction side requests are marked `no_store`, so they no longer write to or evict the main conversation's prompt cache.
 - **Stable Halogen session resume**: root sessions send `X-Halogen-Keep` / `X-Halogen-From`, preserving the reply-end resume point across turns instead of competing with automatic keep slots.
+- The first continuation of an existing session after upgrading may still require one initial prefill; later turns reuse the new stable prefix.
 
 ## The Classic UI Is Back!
 

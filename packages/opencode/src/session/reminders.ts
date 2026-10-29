@@ -13,6 +13,19 @@ import PROMPT_PLAN from "./prompt/plan.txt"
 import BUILD_SWITCH from "./prompt/build-switch.txt"
 import PLAN_MODE from "./prompt/plan-mode.txt"
 
+const REMINDER_METADATA_KEY = "opencode-enhanced"
+type ReminderKind = "plan-mode" | "build-switch"
+
+function hasReminder(userMessage: SessionV1.WithParts, kind: ReminderKind) {
+  return userMessage.parts.some((part) => {
+    if (part.type !== "text" || !part.synthetic) return false
+    const marker = (part.metadata as Record<string, unknown> | undefined)?.[REMINDER_METADATA_KEY] as
+      | { kind?: unknown }
+      | undefined
+    return marker?.kind === kind
+  })
+}
+
 export const apply = Effect.fn("SessionReminders.apply")(function* (input: {
   messages: SessionV1.WithParts[]
   agent: Agent.Info
@@ -25,26 +38,34 @@ export const apply = Effect.fn("SessionReminders.apply")(function* (input: {
   if (!userMessage) return input.messages
 
   if (!flags.experimentalPlanMode) {
-    if (input.agent.name === "plan") {
-      userMessage.parts.push({
+    if (input.agent.name === "plan" && !hasReminder(userMessage, "plan-mode")) {
+      const part = yield* sessions.updatePart({
         id: PartID.ascending(),
         messageID: userMessage.info.id,
         sessionID: userMessage.info.sessionID,
         type: "text",
         text: PROMPT_PLAN,
         synthetic: true,
+        metadata: {
+          [REMINDER_METADATA_KEY]: { kind: "plan-mode" },
+        },
       })
+      userMessage.parts.push(part)
     }
     const wasPlan = input.messages.some((msg) => msg.info.role === "assistant" && msg.info.agent === "plan")
-    if (wasPlan && input.agent.name === "build") {
-      userMessage.parts.push({
+    if (wasPlan && input.agent.name === "build" && !hasReminder(userMessage, "build-switch")) {
+      const part = yield* sessions.updatePart({
         id: PartID.ascending(),
         messageID: userMessage.info.id,
         sessionID: userMessage.info.sessionID,
         type: "text",
         text: BUILD_SWITCH,
         synthetic: true,
+        metadata: {
+          [REMINDER_METADATA_KEY]: { kind: "build-switch" },
+        },
       })
+      userMessage.parts.push(part)
     }
     return input.messages
   }

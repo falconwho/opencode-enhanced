@@ -450,6 +450,14 @@ const assistantWithTokens = Effect.fn("test.assistantWithTokens")(function* (
   return msg
 })
 
+function syntheticPartKind(part: SessionV1.Part) {
+  if (part.type !== "text" || !part.synthetic) return
+  const marker = (part.metadata as Record<string, unknown> | undefined)?.["opencode-enhanced"] as
+    | { kind?: unknown }
+    | undefined
+  return typeof marker?.kind === "string" ? marker.kind : undefined
+}
+
 const addSubtask = (sessionID: SessionID, messageID: MessageID, model = ref) =>
   Effect.gen(function* () {
     const session = yield* Session.Service
@@ -2657,9 +2665,14 @@ it.instance("persists AGENTS instructions as a synthetic message after the turn"
     const original = persisted.find((message) =>
       message.parts.some((part) => part.type === "text" && part.text === "hello there"),
     )
-    expect(original?.parts.filter((part) => part.type === "text").map((part) => part.text)).toEqual([
-      "hello there",
-    ])
+    expect(
+      original?.parts.filter((part): part is SessionV1.TextPart => part.type === "text" && !part.synthetic).map((part) => part.text),
+    ).toEqual(["hello there"])
+    expect(
+      original?.parts.some(
+        (part) => part.type === "text" && part.synthetic && part.text.includes("Current date:"),
+      ),
+    ).toBe(true)
 
     const reminders = persisted.filter(isSyntheticUserMessage)
     expect(reminders).toHaveLength(1)
@@ -2704,9 +2717,14 @@ it.instance("appends the AGENTS reminder after completed tool results", () =>
     const original = persisted.find((message) =>
       message.parts.some((part) => part.type === "text" && part.text === "find files"),
     )
-    expect(original?.parts.filter((part) => part.type === "text").map((part) => part.text)).toEqual([
-      "find files",
-    ])
+    expect(
+      original?.parts.filter((part): part is SessionV1.TextPart => part.type === "text" && !part.synthetic).map((part) => part.text),
+    ).toEqual(["find files"])
+    expect(
+      original?.parts.some(
+        (part) => part.type === "text" && part.synthetic && part.text.includes("Current date:"),
+      ),
+    ).toBe(true)
     const reminderIndex = persisted.findIndex((message) => message.info.id === reminders[0]!.info.id)
     const finalAssistantIndex = persisted.findLastIndex(
       (message) => message.info.role === "assistant" && message.info.finish === "stop",
@@ -2746,4 +2764,98 @@ it.instance("honors the agents tail reminder toggle", () =>
     const persisted = yield* sessions.messages({ sessionID: chat.id })
     expect(persisted.filter(isSyntheticUserMessage)).toHaveLength(0)
   }),
+)
+it.instance(
+  "persists date and plan reminders with a stable prompt prefix",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const chat = yield* sessions.create({ title: "Prefix stability" })
+
+      const first = yield* prompt.prompt({
+        sessionID: chat.id,
+        agent: "plan",
+        noReply: true,
+        parts: [{ type: "text", text: "first question" }],
+      })
+      yield* llm.text("first answer")
+      yield* prompt.loop({ sessionID: chat.id })
+
+      const firstHit = (yield* llm.hits)[0]!
+      const firstMessages = firstHit.body.messages as unknown[]
+      const firstBody = JSON.stringify(firstMessages)
+      const dateIndex = firstBody.indexOf("Current date:")
+      const planIndex = firstBody.indexOf("Plan Mode")
+      expect(dateIndex).toBeGreaterThanOrEqual(0)
+      expect(planIndex).toBeGreaterThan(dateIndex)
+
+      const persistedFirst = (yield* sessions.messages({ sessionID: chat.id })).find(
+        (message) => message.info.id === first.info.id,
+      )!
+      expect(persistedFirst.parts.some((part) => syntheticPartKind(part) === "current-date")).toBe(true)
+      expect(persistedFirst.parts.filter((part) => syntheticPartKind(part) === "plan-mode")).toHaveLength(1)
+
+      const second = yield* prompt.prompt({
+        sessionID: chat.id,
+        agent: "plan",
+        noReply: true,
+        parts: [{ type: "text", text: "second question" }],
+      })
+      yield* llm.text("second answer")
+      yield* prompt.loop({ sessionID: chat.id })
+
+      const hits = yield* llm.hits
+      expect(hits).toHaveLength(2)
+      const secondMessages = hits[1]!.body.messages as unknown[]
+      expect(secondMessages.slice(0, firstMessages.length)).toEqual(firstMessages)
+
+      const persisted = yield* sessions.messages({ sessionID: chat.id })
+      const firstUser = persisted.find((message) => message.info.id === first.info.id)!
+      const secondUser = persisted.find((message) => message.info.id === second.info.id)!
+      expect(firstUser.parts.filter((part) => syntheticPartKind(part) === "plan-mode")).toHaveLength(1)
+      expect(secondUser.parts.filter((part) => syntheticPartKind(part) === "plan-mode")).toHaveLength(1)
+      expect(secondUser.parts.some((part) => syntheticPartKind(part) === "current-date")).toBe(false)
+    }),
+  15_000,
+)
+it.instance(
+  "keeps an old session prefix stable after the first 1.11 turn",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const chat = yield* sessions.create({ title: "Old session prefix" })
+
+      const old = yield* user(chat.id, "old turn")
+      yield* assistantWithTokens(chat.id, old.id, 1_000)
+      yield* prompt.prompt({
+        sessionID: chat.id,
+        agent: "build",
+        noReply: true,
+        parts: [{ type: "text", text: "first new turn" }],
+      })
+      yield* llm.text("first new answer")
+      yield* prompt.loop({ sessionID: chat.id })
+
+      const firstHit = (yield* llm.hits)[0]!
+      const firstMessages = firstHit.body.messages as unknown[]
+
+      yield* prompt.prompt({
+        sessionID: chat.id,
+        agent: "build",
+        noReply: true,
+        parts: [{ type: "text", text: "second new turn" }],
+      })
+      yield* llm.text("second new answer")
+      yield* prompt.loop({ sessionID: chat.id })
+
+      const hits = yield* llm.hits
+      expect(hits).toHaveLength(2)
+      const secondMessages = hits[1]!.body.messages as unknown[]
+      expect(secondMessages.slice(0, firstMessages.length)).toEqual(firstMessages)
+    }),
+  15_000,
 )

@@ -11,16 +11,18 @@
 
 ## 使用方式
 
-目前发布了window版本，现在已经升级1.10版，下载点击 [发布页面](https://github.com/falconwho/opencode-enhanced/releases)
+目前发布了window版本，现在已经升级1.11版，下载点击 [发布页面](https://github.com/falconwho/opencode-enhanced/releases)
 
 - 系统文件和配置参数独立，不影响现有OpenCode运行。
 - 免安装版，解压zip后直接打开里面的 opencode Enhanced.exe 即可使用
 - 界面支持多语言
 
-### 1.10版更新内容
+### 1.11版更新内容
 
+- **稳定 prompt 前缀**：当前日期不再写入稳定的 system prompt，而是在日期变化时作为 synthetic reminder 持久化到当前 user 消息。Plan/Build reminder 也会持久化并保证幂等，不再改写已有历史。这样可以减少跨日和空闲后的 prompt cache 失效。
 - **Halogen 缓存隔离**：标题、审批、记忆和压缩等辅助请求标记为 `no_store`，不再写入或挤占主对话的 prompt cache。
 - **Halogen 会话恢复点稳定**：根会话发送 `X-Halogen-Keep` / `X-Halogen-From`，跨轮保留回复末尾恢复点，减少自动 keep 竞争。
+- 旧会话升级后的第一次继续可能仍需要一次初始 prefill；之后会复用新的稳定前缀。
 
 
 

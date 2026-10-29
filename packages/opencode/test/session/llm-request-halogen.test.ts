@@ -105,6 +105,26 @@ describe("Halogen prompt cache policy", () => {
     expect(header(result, "X-Halogen-From")).toBe(`opencode-${sessionID}`)
   })
 
+  test("does not count a synthetic date part as a prior user message", async () => {
+    const result = await prepare({
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: "hello" },
+            {
+              type: "text",
+              text: "<system-reminder>\nCurrent date: Thu Oct 29 2026\n</system-reminder>",
+            },
+          ],
+        },
+      ],
+    })
+
+    expect(header(result, "X-Halogen-Keep")).toBe(`opencode-${sessionID}`)
+    expect(header(result, "X-Halogen-From")).toBeUndefined()
+  })
+
   test("marks explicit noStore requests as no_store", async () => {
     const result = await prepare({ noStore: true })
 
