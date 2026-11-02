@@ -274,6 +274,7 @@ const LanguageSetting = () => {
 
 export const SettingsGeneralV2: Component<{
   sessionID?: string
+  directory?: string
 }> = (props) => {
   const language = useLanguage()
   const platform = usePlatform()
@@ -392,7 +393,7 @@ export const SettingsGeneralV2: Component<{
       <h3 class="settings-v2-section-title">记忆</h3>
       <SettingsListV2>
         <SettingsRowV2 title="长期记忆" description="打开独立的记忆库窗口，管理画像、记忆、复习和运维。">
-          <ButtonV2 size="small" onClick={() => dialog.show(() => <MemoryDialog sessionID={props.sessionID} />)}>
+          <ButtonV2 size="small" onClick={() => dialog.show(() => <MemoryDialog sessionID={props.sessionID} directory={props.directory} />)}>
             打开记忆库
           </ButtonV2>
         </SettingsRowV2>

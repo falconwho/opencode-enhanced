@@ -2,7 +2,6 @@ import { Component, For, Show, createResource, createSignal } from "solid-js"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { Button } from "@opencode-ai/ui/button"
 import { TextField } from "@opencode-ai/ui/text-field"
-import { useSDK } from "@/context/sdk"
 import { useServerSDK } from "@/context/server-sdk"
 import { authTokenFromCredentials } from "@/utils/server"
 import { showToast } from "@/utils/toast"
@@ -37,8 +36,7 @@ type Hit = {
 
 const tabs = ["概览", "记忆库", "画像", "复习", "运维"] as const
 
-export const MemoryDialog: Component<{ sessionID?: string }> = (props) => {
-  const sdk = useSDK()
+export const MemoryDialog: Component<{ sessionID?: string; directory?: string }> = (props) => {
   const serverSdk = useServerSDK()
   const [tab, setTab] = createSignal<(typeof tabs)[number]>("概览")
   const [query, setQuery] = createSignal("")
@@ -48,7 +46,7 @@ export const MemoryDialog: Component<{ sessionID?: string }> = (props) => {
     const http = serverSdk().server.http
     const params = new URLSearchParams()
     if (props.sessionID) params.set("sessionID", props.sessionID)
-    if (sdk().directory) params.set("directory", sdk().directory)
+    if (props.directory) params.set("directory", props.directory)
     const separator = path.includes("?") ? "&" : "?"
     const url = new URL(`${path}${params.toString() ? separator + params.toString() : ""}`, http.url)
     const res = await fetch(url, {

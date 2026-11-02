@@ -202,7 +202,7 @@ export const SettingsGeneral: Component = () => {
     return res.json()
   }
   const openMemory = () => {
-    dialog.show(() => <MemoryDialog sessionID={params.id} />)
+    dialog.show(() => <MemoryDialog sessionID={params.id} directory={dir()} />)
   }
   const viewMemory = () => {
     void memoryFetch("/memory/summary")
