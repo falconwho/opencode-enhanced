@@ -96,6 +96,28 @@ describe("syncPromptModel", () => {
 
     expect(calls).toEqual([])
   })
+
+  test("preserves an explicit default in prompt state", () => {
+    const calls: unknown[] = []
+
+    syncPromptModel(
+      {
+        model: {
+          current: () => ({ id: "claude", provider: { id: "anthropic" } }),
+          set() {},
+          variant: { current: () => undefined, selected: () => null, set() {} },
+        },
+      },
+      {
+        model: {
+          current: () => undefined,
+          set: (value) => calls.push(value),
+        },
+      },
+    )
+
+    expect(calls).toEqual([{ providerID: "anthropic", modelID: "claude", variant: null }])
+  })
 })
 
 describe("restorePromptModel", () => {
@@ -146,6 +168,31 @@ describe("restorePromptModel", () => {
     )
 
     expect(restored).toBe(false)
+    expect(calls).toEqual([])
+  })
+
+  test("does not erase a saved session variant when the prompt has no variant", () => {
+    const calls: unknown[] = []
+    const restored = restorePromptModel(
+      {
+        model: {
+          current: () => ({ id: "claude", provider: { id: "anthropic" } }),
+          set: (model) => calls.push(model),
+          variant: {
+            current: () => "xhigh",
+            set: (variant) => calls.push(variant),
+          },
+        },
+      },
+      {
+        model: {
+          current: () => ({ providerID: "anthropic", modelID: "claude" }),
+          set() {},
+        },
+      },
+    )
+
+    expect(restored).toBe(true)
     expect(calls).toEqual([])
   })
 })

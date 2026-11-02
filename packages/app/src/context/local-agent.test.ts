@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { hasCustomAgent, resolveAgent } from "./local-agent"
+import { hasCustomAgent, resolveActiveAgent, resolveAgent } from "./local-agent"
 
 describe("hasCustomAgent", () => {
   test("detects explicitly custom agents", () => {
@@ -25,5 +25,17 @@ describe("resolveAgent", () => {
 
   test("uses the first agent when build is unavailable", () => {
     expect(resolveAgent([{ name: "custom" }], "missing")?.name).toBe("custom")
+  })
+})
+
+describe("resolveActiveAgent", () => {
+  const agents = [{ name: "plan" }, { name: "build" }, { name: "custom" }]
+
+  test("uses build for a session without its own agent instead of the last selection", () => {
+    expect(resolveActiveAgent(agents, undefined)?.name).toBe("build")
+  })
+
+  test("keeps an explicitly selected session agent", () => {
+    expect(resolveActiveAgent(agents, "plan")?.name).toBe("plan")
   })
 })

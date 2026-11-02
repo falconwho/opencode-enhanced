@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test"
-import { cycleModelVariant, getConfiguredAgentVariant, resolveModelVariant } from "./model-variant"
+import {
+  cycleModelVariant,
+  getConfiguredAgentVariant,
+  resolveEffectiveVariant,
+  resolveModelVariant,
+} from "./model-variant"
 
 describe("model variant", () => {
   test("resolves configured agent variant when model matches", () => {
@@ -82,5 +87,43 @@ describe("model variant", () => {
     })
 
     expect(value).toBe("low")
+  })
+})
+
+describe("resolveEffectiveVariant", () => {
+  test("keeps an explicit default even when a global fallback exists", () => {
+    const value = resolveEffectiveVariant({
+      variants: ["low", "high", "xhigh"],
+      selected: null,
+      configured: "high",
+      fallback: "xhigh",
+      allowFallback: true,
+    })
+
+    expect(value).toBeUndefined()
+  })
+
+  test("does not read the global fallback for an existing session", () => {
+    const value = resolveEffectiveVariant({
+      variants: ["low", "high", "xhigh"],
+      selected: undefined,
+      configured: undefined,
+      fallback: "xhigh",
+      allowFallback: false,
+    })
+
+    expect(value).toBeUndefined()
+  })
+
+  test("uses the global fallback as the seed for a new session", () => {
+    const value = resolveEffectiveVariant({
+      variants: ["low", "high", "xhigh"],
+      selected: undefined,
+      configured: undefined,
+      fallback: "xhigh",
+      allowFallback: true,
+    })
+
+    expect(value).toBe("xhigh")
   })
 })

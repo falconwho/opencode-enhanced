@@ -2,7 +2,7 @@ import { batch, createMemo, createSignal, startTransition } from "solid-js"
 import { useParams } from "@solidjs/router"
 import { useModels } from "@/context/models"
 import type { ModelKey, ModelSelection } from "@/context/local"
-import { cycleModelVariant, getConfiguredAgentVariant, resolveModelVariant } from "@/context/model-variant"
+import { cycleModelVariant, getConfiguredAgentVariant, resolveEffectiveVariant } from "@/context/model-variant"
 import { usePrompt } from "@/context/prompt"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
@@ -148,16 +148,15 @@ export function createPromptModelSelection(input: { agent: () => { model?: Model
         return prompt.model.current()?.variant
       },
       current() {
-        const resolved = resolveModelVariant({
+        const model = current()
+        if (!model) return
+        return resolveEffectiveVariant({
           variants: this.list(),
           selected: this.selected(),
           configured: this.configured(),
+          fallback: models.variant.get({ providerID: model.provider.id, modelID: model.id }),
+          allowFallback: true,
         })
-        if (resolved) return resolved
-        const model = current()
-        if (!model) return
-        const saved = models.variant.get({ providerID: model.provider.id, modelID: model.id })
-        if (saved && this.list().includes(saved)) return saved
       },
       list() {
         return Object.keys(current()?.variants ?? {})

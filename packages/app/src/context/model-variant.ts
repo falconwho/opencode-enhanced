@@ -35,6 +35,15 @@ export function resolveModelVariant(input: VariantInput) {
   return undefined
 }
 
+export function resolveEffectiveVariant(input: VariantInput & { fallback?: string; allowFallback: boolean }) {
+  if (input.selected === null) return undefined
+  const resolved = resolveModelVariant(input)
+  if (resolved) return resolved
+  if (!input.allowFallback) return undefined
+  if (input.fallback && input.variants.includes(input.fallback)) return input.fallback
+  return undefined
+}
+
 export function cycleModelVariant(input: VariantInput) {
   if (input.variants.length === 0) return undefined
   if (input.selected === null) return input.variants[0]

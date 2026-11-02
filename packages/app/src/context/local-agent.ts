@@ -5,3 +5,7 @@ export function hasCustomAgent(items: Array<{ native?: boolean }>) {
 export function resolveAgent<T extends { name: string }>(items: T[], name?: string) {
   return items.find((item) => item.name === name) ?? items.find((item) => item.name === "build") ?? items[0]
 }
+
+export function resolveActiveAgent<T extends { name: string }>(items: T[], name?: string) {
+  return resolveAgent(items, name ?? "build")
+}

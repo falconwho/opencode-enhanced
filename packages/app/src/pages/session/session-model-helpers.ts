@@ -13,6 +13,7 @@ type ModelSelection = {
     set(model: { providerID: string; modelID: string }): void
     variant: {
       current(): string | undefined
+      selected?(): string | null | undefined
       set(variant: string | undefined): void
     }
   }
@@ -36,10 +37,11 @@ export const syncSessionModel = (local: Local, msg: UserMessage) => {
 export const syncPromptModel = (local: ModelSelection, prompt: PromptState) => {
   const model = local.model.current()
   if (!model) return
+  const selected = local.model.variant.selected?.()
   const next = {
     providerID: model.provider.id,
     modelID: model.id,
-    variant: local.model.variant.current(),
+    variant: selected === null ? null : local.model.variant.current(),
   }
   const current = prompt.model.current()
   if (current?.providerID === next.providerID && current.modelID === next.modelID && current.variant === next.variant)
@@ -51,13 +53,10 @@ export const restorePromptModel = (local: ModelSelection, prompt: PromptState) =
   const model = prompt.model.current()
   if (!model) return false
   const current = local.model.current()
-  if (
-    current?.provider.id === model.providerID &&
-    current.id === model.modelID &&
-    local.model.variant.current() === (model.variant ?? undefined)
-  )
+  const sameModel = current?.provider.id === model.providerID && current.id === model.modelID
+  if (sameModel && (model.variant === undefined || local.model.variant.current() === (model.variant ?? undefined)))
     return true
-  local.model.set({ providerID: model.providerID, modelID: model.modelID })
-  local.model.variant.set(model.variant ?? undefined)
+  if (!sameModel) local.model.set({ providerID: model.providerID, modelID: model.modelID })
+  if (model.variant !== undefined) local.model.variant.set(model.variant ?? undefined)
   return true
 }

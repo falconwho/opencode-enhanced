@@ -8,8 +8,8 @@ import { useSettings } from "@/context/settings"
 import { useProviders } from "@/hooks/use-providers"
 import { resolveDefaultModel } from "@/hooks/provider-catalog"
 import { Persist, persisted } from "@/utils/persist"
-import { hasCustomAgent, resolveAgent } from "./local-agent"
-import { cycleModelVariant, getConfiguredAgentVariant, resolveModelVariant } from "./model-variant"
+import { hasCustomAgent, resolveActiveAgent, resolveAgent } from "./local-agent"
+import { cycleModelVariant, getConfiguredAgentVariant, resolveEffectiveVariant } from "./model-variant"
 import { useSDK } from "./sdk"
 import { useSync } from "./sync"
 import { useServerSDK } from "./server-sdk"
@@ -83,7 +83,6 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     )
 
     const [store, setStore] = createStore<{
-      current?: string
       draft?: State
       promoting?: State
       last?: {
@@ -93,7 +92,6 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         variant?: string | null
       }
     }>({
-      current: list()[0]?.name,
       draft: undefined,
       last: undefined,
     })
@@ -114,16 +112,6 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     const pickAgent = (name: string | undefined) => {
       return resolveAgent(list(), name)
     }
-
-    createEffect(() => {
-      const items = list()
-      if (items.length === 0) {
-        if (store.current !== undefined) setStore("current", undefined)
-        return
-      }
-      if (items.some((item) => item.name === store.current)) return
-      setStore("current", items[0]?.name)
-    })
 
     const scope = createMemo<State | undefined>(() => {
       const session = id()
@@ -183,17 +171,13 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       list,
       visible: agentsVisible,
       current() {
-        return pickAgent(agentsVisible() ? (scope()?.agent ?? store.current) : "build")
+        return resolveActiveAgent(list(), agentsVisible() ? scope()?.agent : undefined)
       },
       set(name: string | undefined) {
         const item = pickAgent(name)
-        if (!item) {
-          setStore("current", undefined)
-          return
-        }
+        if (!item) return
 
         batch(() => {
-          setStore("current", item.name)
           setStore("last", {
             type: "agent",
             agent: item.name,
@@ -216,10 +200,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       },
       move(direction: 1 | -1) {
         const items = list()
-        if (items.length === 0) {
-          setStore("current", undefined)
-          return
-        }
+        if (items.length === 0) return
 
         let next = items.findIndex((item) => item.name === agent.current()?.name) + direction
         if (next < 0) next = items.length - 1
@@ -325,16 +306,15 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         configured,
         selected,
         current() {
-          const resolved = resolveModelVariant({
+          const model = current()
+          if (!model) return
+          return resolveEffectiveVariant({
             variants: this.list(),
             selected: this.selected(),
             configured: this.configured(),
+            fallback: models.variant.get({ providerID: model.provider.id, modelID: model.id }),
+            allowFallback: !id(),
           })
-          if (resolved) return resolved
-          const model = current()
-          if (!model) return
-          const saved = models.variant.get({ providerID: model.provider.id, modelID: model.id })
-          if (saved && this.list().includes(saved)) return saved
         },
         list() {
           const item = current()
