@@ -3,6 +3,7 @@ import { Dialog } from "@opencode-ai/ui/dialog"
 import { Button } from "@opencode-ai/ui/button"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { useServerSDK } from "@/context/server-sdk"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { authTokenFromCredentials } from "@/utils/server"
 import { showToast } from "@/utils/toast"
 
@@ -37,10 +38,12 @@ type Hit = {
 const tabs = ["概览", "记忆库", "画像", "复习", "运维"] as const
 
 export const MemoryDialog: Component<{ sessionID?: string; directory?: string }> = (props) => {
+  const dialog = useDialog()
   const serverSdk = useServerSDK()
   const [tab, setTab] = createSignal<(typeof tabs)[number]>("概览")
   const [query, setQuery] = createSignal("")
   const [profileText, setProfileText] = createSignal("")
+  const [loadError, setLoadError] = createSignal<string>()
 
   const request = async (path: string, init?: RequestInit) => {
     const http = serverSdk().server.http
@@ -63,10 +66,19 @@ export const MemoryDialog: Component<{ sessionID?: string; directory?: string }>
     return res.json()
   }
 
-  const [stats, { refetch: refreshStats }] = createResource<Stats>(() => request("/memory/v3/stats"))
-  const [nodes, { refetch: refreshNodes }] = createResource<Node[]>(() => request("/memory/v3/nodes?limit=200"))
-  const [profile, { refetch: refreshProfile }] = createResource<Profile>(() => request("/memory/v3/profile"))
-  const [review, { refetch: refreshReview }] = createResource<Node[]>(() => request("/memory/v3/review"))
+  const load = async <T,>(path: string, fallback: T): Promise<T> => {
+    try {
+      return (await request(path)) as T
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : String(error))
+      return fallback
+    }
+  }
+
+  const [stats, { refetch: refreshStats }] = createResource<Stats>(() => load("/memory/v3/stats", {}))
+  const [nodes, { refetch: refreshNodes }] = createResource<Node[]>(() => load("/memory/v3/nodes?limit=200", []))
+  const [profile, { refetch: refreshProfile }] = createResource<Profile>(() => load("/memory/v3/profile", {}))
+  const [review, { refetch: refreshReview }] = createResource<Node[]>(() => load("/memory/v3/review", []))
   const [search, setSearch] = createSignal<Hit[]>([])
   const [searching, setSearching] = createSignal(false)
 
@@ -140,13 +152,16 @@ export const MemoryDialog: Component<{ sessionID?: string; directory?: string }>
 
   return (
     <Dialog size="x-large" class="h-[90vh]">
-      <div class="flex h-full min-h-0 flex-col gap-3">
-        <div class="flex items-center justify-between gap-3 border-b border-border-base pb-2">
+      <div class="flex h-full min-h-0 flex-col gap-5 p-6">
+        <div class="flex items-start justify-between gap-3 border-b border-border-base pb-4">
           <div>
             <div class="text-16-medium text-text-strong">记忆库</div>
             <div class="text-12-regular text-text-weak">本地长期记忆 · {props.sessionID ?? "当前会话"}</div>
           </div>
-          <div class="flex gap-1">
+          <div class="flex flex-wrap items-center justify-end gap-2">
+            <Button size="small" variant="ghost" onClick={() => dialog.close()}>
+              返回设置
+            </Button>
             <For each={tabs}>
               {(item) => (
                 <Button size="small" variant={tab() === item ? "primary" : "ghost"} onClick={() => setTab(item)}>
@@ -156,6 +171,17 @@ export const MemoryDialog: Component<{ sessionID?: string; directory?: string }>
             </For>
           </div>
         </div>
+
+        <Show when={loadError()}>
+          {(message) => (
+            <div class="flex items-center justify-between gap-3 rounded border border-border-danger-base px-3 py-2 text-12-regular text-text-danger-base">
+              <span class="min-w-0 break-all">记忆库加载失败：{message()}</span>
+              <Button size="small" variant="ghost" onClick={refresh}>
+                重试
+              </Button>
+            </div>
+          )}
+        </Show>
 
         <div class="min-h-0 flex-1 overflow-auto pr-1">
           <Show when={tab() === "概览"}>
