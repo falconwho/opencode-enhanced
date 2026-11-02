@@ -10,6 +10,9 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
     const svc = yield* Memory.Service
     const v3 = yield* MemoryV3
 
+    const safe = <T,>(value: T): unknown =>
+      value === undefined ? null : JSON.parse(JSON.stringify(value))
+
     const resolve = (sessionID?: string) =>
       Effect.gen(function* () {
         return sessionID ?? (yield* v3.latestSessionID())
@@ -40,7 +43,7 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
     const v3Stats = Effect.fn("MemoryHttpApi.v3Stats")(function* (ctx: { query: { sessionID?: string } }) {
       const id = yield* resolve(ctx.query.sessionID)
       if (!id) return { total: 0, active: 0, archived: 0, due: 0, byKind: {}, rooms: [] }
-      return yield* v3.stats(id)
+      return safe(yield* v3.stats(id))
     })
 
     const v3Nodes = Effect.fn("MemoryHttpApi.v3Nodes")(function* (ctx: {
@@ -56,20 +59,20 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
     }) {
       const id = yield* resolve(ctx.query.sessionID)
       if (!id) return []
-      return yield* v3.nodes(id, {
+      return safe(yield* v3.nodes(id, {
         status: ctx.query.status as never,
         kind: ctx.query.kind as never,
         room: ctx.query.room,
         query: ctx.query.query,
         limit: ctx.query.limit,
         offset: ctx.query.offset,
-      })
+      }))
     })
 
     const v3Profile = Effect.fn("MemoryHttpApi.v3Profile")(function* (ctx: { query: { sessionID?: string } }) {
       const id = yield* resolve(ctx.query.sessionID)
-      if (!id) return { current: undefined, versions: [] }
-      return yield* v3.profile(id)
+      if (!id) return { current: null, versions: [] }
+      return safe(yield* v3.profile(id))
     })
 
     const v3ProfileSet = Effect.fn("MemoryHttpApi.v3ProfileSet")(function* (ctx: {
@@ -78,13 +81,13 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
     }) {
       const id = yield* resolve(ctx.query.sessionID)
       if (!id) return { version: 0, content: "" }
-      return yield* v3.setProfile(id, ctx.payload.content)
+      return safe(yield* v3.setProfile(id, ctx.payload.content))
     })
 
     const v3Review = Effect.fn("MemoryHttpApi.v3Review")(function* (ctx: { query: { sessionID?: string } }) {
       const id = yield* resolve(ctx.query.sessionID)
       if (!id) return []
-      return yield* v3.review(id, { action: "queue" })
+      return safe(yield* v3.review(id, { action: "queue" }))
     })
 
     const v3ReviewGrade = Effect.fn("MemoryHttpApi.v3ReviewGrade")(function* (ctx: {
@@ -92,8 +95,8 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
       payload: { id: string; grade: number }
     }) {
       const id = yield* resolve(ctx.query.sessionID)
-      if (!id) return undefined
-      return yield* v3.review(id, { action: "grade", id: ctx.payload.id, grade: ctx.payload.grade })
+      if (!id) return null
+      return safe(yield* v3.review(id, { action: "grade", id: ctx.payload.id, grade: ctx.payload.grade }))
     })
 
     const v3Mutate = Effect.fn("MemoryHttpApi.v3Mutate")(function* (ctx: {
@@ -101,8 +104,8 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
       payload: { id: string; action: "update" | "forget" | "archive" | "restore"; content?: string; importance?: number }
     }) {
       const id = yield* resolve(ctx.query.sessionID)
-      if (!id) return undefined
-      return yield* v3.mutate(id, ctx.payload)
+      if (!id) return null
+      return safe(yield* v3.mutate(id, ctx.payload))
     })
 
     const v3Clear = Effect.fn("MemoryHttpApi.v3Clear")(function* (ctx: { query: { sessionID?: string } }) {
@@ -117,11 +120,11 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
     }) {
       const id = yield* resolve(ctx.query.sessionID)
       if (!id) return { hits: [], degraded: true }
-      return yield* v3.search(id, {
+      return safe(yield* v3.search(id, {
         query: ctx.query.query,
         room: ctx.query.room,
         limit: ctx.query.limit,
-      })
+      }))
     })
 
     return handlers

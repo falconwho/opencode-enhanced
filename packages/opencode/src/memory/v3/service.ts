@@ -178,6 +178,7 @@ const layer = Layer.effect(
 
     const search = Effect.fn("MemoryV3.search")(function* (sessionID: string, input: MemorySearchInput) {
       const queryEmbedding = yield* Effect.tryPromise(() => embed([input.query])).pipe(
+        Effect.timeoutOrElse({ duration: "5 seconds", orElse: () => Effect.succeed(undefined) }),
         Effect.catch(() => Effect.succeed(undefined)),
       )
       const vector = queryEmbedding?.[0]
@@ -216,7 +217,10 @@ const layer = Layer.effect(
       const target = yield* store(sessionID, scope)
       let embedding: Float32Array | undefined
       if (settings.enabled) {
-        const vectors = yield* Effect.tryPromise(() => embed([input.content])).pipe(Effect.catch(() => Effect.succeed(undefined)))
+        const vectors = yield* Effect.tryPromise(() => embed([input.content])).pipe(
+          Effect.timeoutOrElse({ duration: "5 seconds", orElse: () => Effect.succeed(undefined) }),
+          Effect.catch(() => Effect.succeed(undefined)),
+        )
         embedding = vectors?.[0]
       }
       const result = target.save({
