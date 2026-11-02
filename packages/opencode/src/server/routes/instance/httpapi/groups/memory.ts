@@ -1,4 +1,5 @@
 import { Memory } from "@/memory"
+import { WorkspaceRoutingQueryFields } from "../middleware/workspace-routing"
 import { Schema } from "effect"
 import { HttpApi, HttpApiEndpoint, HttpApiError, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
 import { Authorization } from "../middleware/authorization"
@@ -16,6 +17,7 @@ export const MemoryConfigInput = Schema.Struct({
 })
 
 // opencode-enhanced F8: read/clear the Codex v2 memory summary.
+const MemoryV3Query = Schema.Struct({ ...WorkspaceRoutingQueryFields, sessionID: Schema.optional(Schema.String) })
 export const MemoryApi = HttpApi.make("memory").add(
   HttpApiGroup.make("memory")
     .add(
@@ -70,6 +72,65 @@ export const MemoryApi = HttpApi.make("memory").add(
             "opencode-enhanced: sync the model and reasoning effort used for memory extraction (follows the AI approval settings).",
         }),
       ),
+      HttpApiEndpoint.get("v3Stats", `${root}/v3/stats`, {
+        query: MemoryV3Query,
+        success: described(Schema.Unknown, "Memory v3 stats"),
+      }),
+      HttpApiEndpoint.get("v3Nodes", `${root}/v3/nodes`, {
+        query: Schema.Struct({
+          ...WorkspaceRoutingQueryFields,
+          sessionID: Schema.optional(Schema.String),
+          status: Schema.optional(Schema.String),
+          kind: Schema.optional(Schema.String),
+          room: Schema.optional(Schema.String),
+          query: Schema.optional(Schema.String),
+          limit: Schema.optional(Schema.Number),
+          offset: Schema.optional(Schema.Number),
+        }),
+        success: described(Schema.Unknown, "Memory v3 nodes"),
+      }),
+      HttpApiEndpoint.get("v3ProfileGet", `${root}/v3/profile`, {
+        query: MemoryV3Query,
+        success: described(Schema.Unknown, "Memory v3 profile"),
+      }),
+      HttpApiEndpoint.post("v3ProfileSet", `${root}/v3/profile`, {
+        query: MemoryV3Query,
+        payload: Schema.Struct({ content: Schema.String }),
+        success: described(Schema.Unknown, "Memory v3 profile update"),
+      }),
+      HttpApiEndpoint.get("v3ReviewQueue", `${root}/v3/review`, {
+        query: MemoryV3Query,
+        success: described(Schema.Unknown, "Memory v3 review queue"),
+      }),
+      HttpApiEndpoint.post("v3ReviewGrade", `${root}/v3/review`, {
+        query: MemoryV3Query,
+        payload: Schema.Struct({ id: Schema.String, grade: Schema.Number }),
+        success: described(Schema.Unknown, "Memory v3 review grade"),
+      }),
+      HttpApiEndpoint.post("v3Mutate", `${root}/v3/mutate`, {
+        query: MemoryV3Query,
+        payload: Schema.Struct({
+          id: Schema.String,
+          action: Schema.Literals(["update", "forget", "archive", "restore"]),
+          content: Schema.optional(Schema.String),
+          importance: Schema.optional(Schema.Number),
+        }),
+        success: described(Schema.Unknown, "Memory v3 mutation"),
+      }),
+      HttpApiEndpoint.post("v3Clear", `${root}/v3/clear`, {
+        query: MemoryV3Query,
+        success: described(Schema.Boolean, "Memory v3 cleared"),
+      }),
+      HttpApiEndpoint.get("v3Search", `${root}/v3/search`, {
+        query: Schema.Struct({
+          ...WorkspaceRoutingQueryFields,
+          sessionID: Schema.optional(Schema.String),
+          query: Schema.String,
+          room: Schema.optional(Schema.String),
+          limit: Schema.optional(Schema.Number),
+        }),
+        success: described(Schema.Unknown, "Memory v3 search"),
+      }),
     )
     .annotateMerge(
       OpenApi.annotations({

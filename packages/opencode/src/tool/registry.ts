@@ -16,7 +16,6 @@ import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
 import { InvalidTool } from "./invalid"
 import { SkillTool } from "./skill"
-import { MemoryListTool, MemoryNoteTool, MemoryReadTool, MemorySearchTool } from "./memory"
 import * as Tool from "./tool"
 import { Config } from "@/config/config"
 import { type ToolContext as PluginToolContext, type ToolDefinition } from "@opencode-ai/plugin"
@@ -51,6 +50,8 @@ import { Permission } from "@/permission"
 import { BackgroundJob } from "@/background/job"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { Memory } from "@/memory"
+import { MemoryV3Tools } from "@/memory/v3/tools"
+import { node as MemoryV3Node } from "@/memory/v3/service"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
 import { MCP } from "@/mcp"
@@ -116,10 +117,9 @@ const layer = Layer.effect(
     const greptool = yield* GrepTool
     const patchtool = yield* ApplyPatchTool
     const skilltool = yield* SkillTool
-    const memoryList = yield* MemoryListTool
-    const memoryRead = yield* MemoryReadTool
-    const memorySearch = yield* MemorySearchTool
-    const memoryNote = yield* MemoryNoteTool
+    const memoryInfos: Tool.Info<any, any>[] = []
+    for (const item of MemoryV3Tools) memoryInfos.push((yield* item) as Tool.Info<any, any>)
+    const memoryTools = yield* Effect.all(memoryInfos.map((item) => Tool.init(item)))
     const agent = yield* Agent.Service
     const codeMode = flags.experimentalCodeMode ? yield* Effect.promise(() => import("./code-mode")) : undefined
     const codeModeTool = codeMode ? yield* codeMode.CodeModeTool : undefined
@@ -229,10 +229,7 @@ const layer = Layer.effect(
           question: Tool.init(question),
           lsp: Tool.init(lsptool),
           plan: Tool.init(plan),
-          memory_list: Tool.init(memoryList),
-          memory_read: Tool.init(memoryRead),
-          memory_search: Tool.init(memorySearch),
-          memory_note: Tool.init(memoryNote),
+          memory: Effect.succeed(memoryTools),
           ...(codeModeTool ? { execute: Tool.init(codeModeTool) } : {}),
         })
 
@@ -253,9 +250,7 @@ const layer = Layer.effect(
             tool.search,
             tool.skill,
             tool.patch,
-            ...(cfg.experimental?.memory
-              ? [tool.memory_list, tool.memory_read, tool.memory_search, tool.memory_note]
-              : []),
+            ...(cfg.experimental?.memory ? tool.memory : []),
             ...(tool.execute ? [tool.execute] : []),
             ...(flags.experimentalLspTool ? [tool.lsp] : []),
             ...(flags.experimentalPlanMode && flags.client === "cli" ? [tool.plan] : []),
@@ -473,6 +468,7 @@ export const node = LayerNode.make({
     Database.node,
     Ripgrep.node,
     Memory.node,
+    MemoryV3Node,
   ],
 })
 

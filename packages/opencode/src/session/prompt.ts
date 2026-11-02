@@ -61,7 +61,8 @@ import { isContinuationPrompt } from "./continuation"
 import { isSyntheticUserMessage } from "./synthetic-message"
 import { usable } from "./overflow"
 import { Todo } from "./todo"
-import { Memory } from "@/memory"
+import { MemoryV3 } from "@/memory/v3"
+import { MemoryContext } from "./memory-context"
 import { LLMEvent } from "@opencode-ai/llm"
 
 // @ts-ignore
@@ -140,7 +141,7 @@ const layer = Layer.effect(
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
     const scope = yield* Scope.Scope
     const instruction = yield* Instruction.Service
-    const memory = yield* Memory.Service
+    const memoryV3 = yield* MemoryV3.Service
     const state = yield* SessionRunState.Service
     const revert = yield* SessionRevert.Service
     const summary = yield* SessionSummary.Service
@@ -1107,11 +1108,9 @@ const layer = Layer.effect(
         let structured: unknown
         let step = 0
         let pendingReminder: ReminderPlan | undefined
+        let memorySteps = 0
+        let memoryCheckpointAt = Date.now()
         const session = yield* sessions.get(sessionID).pipe(Effect.orDie)
-
-        // opencode-enhanced: run the Codex-style memory pipeline in the
-        // background at the start of each root turn.
-        yield* memory.startup(sessionID).pipe(Effect.forkIn(scope))
 
         while (true) {
           yield* status.set(sessionID, { type: "busy" })
@@ -1158,6 +1157,12 @@ const layer = Layer.effect(
           }
 
           step++
+          memorySteps += 1
+          if (memorySteps >= 8 || Date.now() - memoryCheckpointAt >= 10 * 60_000) {
+            memorySteps = 0
+            memoryCheckpointAt = Date.now()
+            yield* memoryV3.ingest(sessionID, "checkpoint").pipe(Effect.ignore, Effect.forkIn(scope))
+          }
           if (step === 1)
             yield* title({
               session,
@@ -1211,6 +1216,7 @@ const layer = Layer.effect(
             Effect.provideService(FSUtil.Service, fsys),
             Effect.provideService(Session.Service, sessions),
           )
+          msgs = yield* MemoryContext.apply({ messages: msgs, session, agent, sessions, memory: memoryV3 })
 
           // opencode-enhanced: only append the reminder after completed tool
           // results. This keeps tool-call pairing intact and leaves the prior
@@ -1328,18 +1334,16 @@ const layer = Layer.effect(
 
             yield* plugin.trigger("experimental.chat.messages.transform", {}, { messages: msgs })
 
-            const [skills, env, instructions, mcpInstructions, memorySummary, modelMsgs] = yield* Effect.all([
+            const [skills, env, instructions, mcpInstructions, modelMsgs] = yield* Effect.all([
               sys.skills(agent),
               sys.environment(model),
               instruction.system().pipe(Effect.orDie),
               sys.mcp(agent, session.permission),
-              memory.systemSummary(sessionID),
               MessageV2.toModelMessagesEffect(msgs, model),
             ])
             const system = [
               ...env,
               ...instructions,
-              ...(memorySummary ? [memorySummary] : []),
               ...(mcpInstructions ? [mcpInstructions] : []),
               ...(skills ? [skills] : []),
             ]
@@ -1465,6 +1469,7 @@ const layer = Layer.effect(
         )
 
         yield* compaction.prune({ sessionID }).pipe(Effect.ignore, Effect.forkIn(scope))
+        yield* memoryV3.ingest(sessionID, "final").pipe(Effect.ignore, Effect.forkIn(scope))
         return yield* lastAssistant(sessionID)
       },
     )
@@ -1747,7 +1752,7 @@ export const node = LayerNode.make({
     Image.node,
     CrossSpawnSpawner.node,
     Instruction.node,
-    Memory.node,
+    MemoryV3.node,
     SessionRunState.node,
     SessionRevert.node,
     SessionSummary.node,

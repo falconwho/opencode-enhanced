@@ -36,6 +36,7 @@ import { decode64 } from "@/utils/base64"
 import { playSoundById, SOUND_OPTIONS } from "@/utils/sound"
 import { ExternalLink } from "./external-link"
 import { SettingsList } from "./settings-list"
+import { MemoryDialog } from "./memory/memory-dialog"
 
 let demoSoundState = {
   cleanup: undefined as (() => void) | undefined,
@@ -199,6 +200,9 @@ export const SettingsGeneral: Component = () => {
     })
     if (!res.ok) throw new Error(`memory request failed: ${res.status}`)
     return res.json()
+  }
+  const openMemory = () => {
+    dialog.show(() => <MemoryDialog sessionID={params.id} />)
   }
   const viewMemory = () => {
     void memoryFetch("/memory/summary")
@@ -507,6 +511,9 @@ export const SettingsGeneral: Component = () => {
           description={language.t("settings.general.row.memory.description")}
         >
           <div class="flex items-center gap-2" data-action="settings-memory">
+            <Button size="small" variant="primary" onClick={openMemory}>
+              打开记忆库
+            </Button>
             <Button size="small" variant="ghost" onClick={viewMemory}>
               {language.t("settings.general.row.memory.viewSummary")}
             </Button>

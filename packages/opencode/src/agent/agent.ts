@@ -144,10 +144,15 @@ const layer = Layer.effect(
           question: "deny",
           plan_enter: "deny",
           plan_exit: "deny",
-          memory_list: "allow",
-          memory_read: "allow",
+          memory_save: "allow",
           memory_search: "allow",
-          memory_note: "allow",
+          memory_read: "allow",
+          memory_facts: "allow",
+          memory_assess: "allow",
+          memory_timeline: "allow",
+          memory_mutate: "allow",
+          memory_review: "allow",
+          memory_navigate: "allow",
         })
 
         const user = Permission.fromConfig(cfg.permission ?? {})

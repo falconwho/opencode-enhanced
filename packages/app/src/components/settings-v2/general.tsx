@@ -13,6 +13,7 @@ import { ExternalLink } from "../external-link"
 import { SettingsListV2 } from "./parts/list"
 import { SettingsRowV2 } from "./parts/row"
 import { LayoutRetirementNotice, LayoutTransitionToggle } from "./interface-transition"
+import { MemoryDialog } from "../memory/memory-dialog"
 import {
   createAppearanceSettingsController,
   createPermissionScopeController,
@@ -386,6 +387,19 @@ export const SettingsGeneralV2: Component<{
     </div>
   )
 
+  const MemorySection = () => (
+    <div class="settings-v2-section">
+      <h3 class="settings-v2-section-title">记忆</h3>
+      <SettingsListV2>
+        <SettingsRowV2 title="长期记忆" description="打开独立的记忆库窗口，管理画像、记忆、复习和运维。">
+          <ButtonV2 size="small" onClick={() => dialog.show(() => <MemoryDialog sessionID={props.sessionID} />)}>
+            打开记忆库
+          </ButtonV2>
+        </SettingsRowV2>
+      </SettingsListV2>
+    </div>
+  )
+
   const AdvancedSection = () => (
     <div class="settings-v2-section">
       <h3 class="settings-v2-section-title">{language.t("settings.general.section.advanced")}</h3>
@@ -551,6 +565,8 @@ export const SettingsGeneralV2: Component<{
         </Show>
 
         <GeneralSection />
+
+        <MemorySection />
 
         <AppearanceSection controller={appearance} />
 

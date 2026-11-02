@@ -16,9 +16,10 @@ export const READONLY_PERMISSIONS = new Set([
   "list",
   "webfetch",
   "websearch",
-  "memory_list",
-  "memory_read",
   "memory_search",
+  "memory_read",
+  "memory_timeline",
+  "memory_navigate",
 ])
 
 export { acceptKey as modeKey, directoryAcceptKey as directoryModeKey }

@@ -22,6 +22,7 @@ import { McpAuth } from "@/mcp/auth"
 import { Permission } from "@/permission"
 import { Approval } from "@/permission/approval"
 import { Memory } from "@/memory"
+import { node as MemoryV3Node } from "@/memory/v3/service"
 import { Plugin } from "@/plugin"
 import { PluginPtyEnvironment } from "@/plugin/pty-environment"
 import { InstanceStore } from "@/project/instance-store"
@@ -237,6 +238,7 @@ const app = LayerNode.group([
   PermissionSaved.node,
   Approval.node,
   Memory.node,
+  MemoryV3Node,
   Todo.node,
   Session.node,
   SessionProjector.node,
