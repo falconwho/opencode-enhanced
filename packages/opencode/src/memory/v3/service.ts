@@ -538,7 +538,8 @@ const layer = Layer.effect(
       if (!settings.enabled || settings.reflect === "off") return { created: 0, applied: 0 }
       const user = yield* store(sessionID, "user")
       const project = yield* store(sessionID, "project")
-      const nodes = [...user.activeNodes(), ...project.activeNodes()].slice(0, 30)
+      const shared = yield* store(sessionID, "shared")
+      const nodes = [...user.activeNodes(), ...project.activeNodes(), ...shared.activeNodes()].slice(0, 30)
       if (nodes.length < 2) return { created: 0, applied: 0 }
       const prompt = [
         "Consolidate this memory graph. Find duplicate or stale memories, useful links, and supported beliefs.",

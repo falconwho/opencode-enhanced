@@ -705,9 +705,15 @@ export class MemoryStore {
         this.db.prepare(`DELETE FROM ${table}`).run()
       }
       for (const [table, rows] of Object.entries(snapshot)) {
-        if (table === "meta" || table === "nodes_fts") continue
+        if (table === "nodes_fts") continue
         if (!Array.isArray(rows) || rows.length === 0) continue
         for (const row of rows) {
+          if (table === "meta" && row.key === "schema_version") continue
+          const target = table === "meta" ? "meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value" : undefined
+          if (table === "meta") {
+            this.db.prepare(`INSERT INTO ${target}`).run(row.key, row.value)
+            continue
+          }
           const keys = Object.keys(row)
           if (!keys.length) continue
           this.db
