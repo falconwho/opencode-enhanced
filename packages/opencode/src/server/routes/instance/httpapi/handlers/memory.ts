@@ -1,6 +1,6 @@
 import { Memory } from "@/memory"
 import { Service as MemoryV3 } from "@/memory/v3/service"
-import { Effect } from "effect"
+import { Cause, Effect } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
 import type { MemoryConfigInput } from "../groups/memory"
@@ -139,7 +139,10 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
     }) {
       const id = yield* resolve(ctx.query.sessionID)
       if (!id) return { imported: 0 }
-      return safe(yield* v3.importMemory(id, ctx.payload.data))
+      return yield* v3.importMemory(id, ctx.payload.data).pipe(
+        Effect.map((value) => safe(value)),
+        Effect.catchCause((cause) => Effect.succeed({ imported: 0, error: Cause.pretty(cause).split("\\n")[0] })),
+      )
     })
 
     const v3RebuildEmbeddings = Effect.fn("MemoryHttpApi.v3RebuildEmbeddings")(function* (ctx: {

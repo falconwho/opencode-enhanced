@@ -1,22 +1,14 @@
-import { afterEach, describe, expect, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import fs from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
-import { SCHEMA_SQL, SCHEMA_VERSION, migrate } from "../../src/memory/v3/schema"
+import { SCHEMA_SQL, SCHEMA_VERSION } from "../../src/memory/v3/schema"
 import { openSqlite } from "../../src/memory/v3/sqlite"
 import { MemoryStore } from "../../src/memory/v3/store"
 
-const roots: string[] = []
-
 async function root() {
-  const value = await fs.mkdtemp(path.join(os.tmpdir(), "oc-memory-v3-portability-"))
-  roots.push(value)
-  return value
+  return fs.mkdtemp(path.join(os.tmpdir(), "oc-memory-v3-portability-"))
 }
-
-afterEach(async () => {
-  for (const value of roots.splice(0)) await fs.rm(value, { recursive: true, force: true }).catch(() => undefined)
-})
 
 describe("memory v3 reflection and portability", () => {
   test("migrates a v1 database without losing nodes", async () => {
