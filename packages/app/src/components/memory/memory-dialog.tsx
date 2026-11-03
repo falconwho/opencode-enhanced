@@ -1,6 +1,7 @@
 import { Component, For, Show, createResource, createSignal } from "solid-js"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { Button } from "@opencode-ai/ui/button"
+import { Icon } from "@opencode-ai/ui/icon"
 import { TextField } from "@opencode-ai/ui/text-field"
 import { useServerSDK } from "@/context/server-sdk"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
@@ -159,7 +160,13 @@ export const MemoryDialog: Component<{ sessionID?: string; directory?: string }>
             <div class="text-12-regular text-text-weak">本地长期记忆 · {props.sessionID ?? "当前会话"}</div>
           </div>
           <div class="flex flex-wrap items-center justify-end gap-2">
-            <Button size="small" variant="ghost" onClick={() => dialog.close()}>
+            <Button
+              size="small"
+              variant="ghost"
+              class="gap-1 border border-border-base"
+              onClick={() => dialog.close()}
+            >
+              <Icon name="arrow-left" size="small" />
               返回设置
             </Button>
             <For each={tabs}>
