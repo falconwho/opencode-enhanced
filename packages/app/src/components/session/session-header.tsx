@@ -33,6 +33,7 @@ import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { reviewTooltipKeybind } from "../command-tooltip-keybind"
 import { useTitlebarRightMount } from "../titlebar"
+import { useTitlebarSessionActions } from "../titlebar-session-actions"
 
 const OPEN_APPS = [
   "vscode",
@@ -283,13 +284,14 @@ export function SessionHeader() {
 
   const [centerMount, setCenterMount] = createSignal<HTMLElement | null>(null)
   const rightMount = useTitlebarRightMount()
+  const actions = useTitlebarSessionActions()
   onMount(() => {
     setCenterMount(document.getElementById("opencode-titlebar-center"))
   })
 
   return (
     <>
-      <Show when={search() && centerMount()} keyed>
+      <Show when={actions() && search() && centerMount()} keyed>
         {(mount) => (
           <Portal mount={mount}>
             <Button
@@ -319,7 +321,7 @@ export function SessionHeader() {
           </Portal>
         )}
       </Show>
-      <Show when={rightMount()} keyed>
+      <Show when={actions() && rightMount()} keyed>
         {(mount) => (
           <Portal mount={mount}>
             <Show
