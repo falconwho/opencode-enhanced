@@ -112,7 +112,7 @@ export function ReasoningPreview(props: { sessionID?: string }) {
         <Show when={!collapsed()}>
           <pre
             ref={previewRef}
-            class="max-h-[120px] overflow-y-auto whitespace-pre-wrap px-3 pb-2 font-mono text-12-regular text-text-weak"
+            class="compact-scrollbar max-h-[120px] overflow-y-auto whitespace-pre-wrap px-3 pb-2 font-mono text-12-regular text-text-weak"
             onScroll={(event) => {
               const element = event.currentTarget
               setStickToBottom(element.scrollHeight - element.scrollTop - element.clientHeight <= 8)

@@ -726,7 +726,7 @@ export const LocalWorkspace = (props: {
       // opencode-enhanced: visible scrollbar, and 200px bottom slack so a
       // right-click context menu on the last session/folder row renders fully
       // instead of clipping at the scroll container's bottom edge.
-      class="size-full flex flex-col pt-2 pb-50 overflow-y-auto [overflow-anchor:none]"
+      class="compact-scrollbar size-full flex flex-col pt-2 pb-50 overflow-y-auto [overflow-anchor:none]"
     >
       <WorkspaceSessionList
         slug={slug}

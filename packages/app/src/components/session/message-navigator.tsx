@@ -45,7 +45,7 @@ export function SessionMessageNavigator(props: { sessionID?: string; onJump?: (m
     <Show when={items().length > 0}>
       <div
         data-component="session-message-navigator"
-        class="absolute left-1 top-1/2 z-10 hidden max-h-[60%] w-[150px] -translate-y-1/2 flex-col gap-0.5 overflow-y-auto rounded-md border border-border-weak-base bg-background-base/95 p-1.5 shadow-md lg:flex"
+        class="compact-scrollbar absolute left-1 top-1/2 z-10 hidden max-h-[60%] w-[150px] -translate-y-1/2 flex-col gap-0.5 overflow-y-auto rounded-md border border-border-weak-base bg-background-base/95 p-1.5 shadow-md lg:flex"
       >
         <div class="px-1 pb-1 text-11-regular text-text-weak">{language.t("session.messageNavigator.title")}</div>
         <For each={items()}>

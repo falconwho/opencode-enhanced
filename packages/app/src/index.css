@@ -328,3 +328,46 @@
     }
   }
 }
+
+:root {
+  --compact-scrollbar-width: 3px;
+  --compact-scrollbar-thumb: var(--border-weak-base);
+  --compact-scrollbar-thumb-hover: var(--border-strong-base);
+}
+
+.compact-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--compact-scrollbar-thumb) transparent;
+}
+
+.compact-scrollbar::-webkit-scrollbar {
+  width: var(--compact-scrollbar-width);
+  height: var(--compact-scrollbar-width);
+}
+
+.compact-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.compact-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--compact-scrollbar-thumb);
+  border-radius: 9999px;
+}
+
+.compact-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--compact-scrollbar-thumb-hover);
+}
+
+.session-timeline-scroll .scroll-view__thumb {
+  width: 8px;
+}
+
+.session-timeline-scroll .scroll-view__thumb::after {
+  width: var(--compact-scrollbar-width);
+  background-color: var(--compact-scrollbar-thumb);
+}
+
+.session-timeline-scroll .scroll-view__thumb:hover::after,
+.session-timeline-scroll .scroll-view__thumb[data-dragging="true"]::after {
+  background-color: var(--compact-scrollbar-thumb-hover);
+}

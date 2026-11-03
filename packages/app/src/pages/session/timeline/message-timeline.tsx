@@ -1391,7 +1391,7 @@ export function MessageTimeline(props: {
         onKeyDown={handleListKeyDown}
         onScroll={handleListScroll}
         onClick={props.onAutoScrollInteraction}
-        class="relative min-w-0 w-full h-full"
+        class="session-timeline-scroll relative min-w-0 w-full h-full"
         style={{
           "--sticky-accordion-top": showHeader() ? "48px" : "0px",
         }}
