@@ -94,6 +94,7 @@ import { TerminalPanelV2 } from "@/pages/session/terminal-panel-v2"
 import { useComposerCommands } from "@/pages/session/use-composer-commands"
 import { useSessionCommands } from "@/pages/session/use-session-commands"
 import { useSessionHashScroll } from "@/pages/session/use-session-hash-scroll"
+import { shouldStartAtBottom } from "@/pages/session/session-enter-scroll"
 import { Identifier } from "@/utils/id"
 import { diffs as list } from "@/utils/diffs"
 import { Persist, persisted } from "@/utils/persist"
@@ -1509,6 +1510,27 @@ export default function Page() {
         if (location.hash || store.messageId || ui.pendingMessage) return
         autoScroll.resume()
       },
+    ),
+  )
+
+  let enteredSession: string | undefined
+  createEffect(
+    on(
+      () => [params.id, messagesReady()] as const,
+      ([id, ready]) => {
+        if (!id || !ready) return
+        if (enteredSession === id) return
+        enteredSession = id
+        if (!shouldStartAtBottom({ hash: location.hash, pendingMessage: ui.pendingMessage, messageId: store.messageId })) return
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (params.id !== id || autoScroll.userScrolled()) return
+            autoScroll.resume()
+            scrollToEnd()
+          })
+        })
+      },
+      { defer: true },
     ),
   )
 
