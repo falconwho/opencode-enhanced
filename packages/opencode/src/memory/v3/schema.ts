@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -129,6 +129,20 @@ CREATE TABLE IF NOT EXISTS embedding_meta (
   dimensions INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS reflect_suggestions (
+  id TEXT PRIMARY KEY,
+  scope TEXT NOT NULL,
+  action TEXT NOT NULL,
+  source_ids_json TEXT NOT NULL,
+  target_id TEXT,
+  content TEXT,
+  reason TEXT,
+  status TEXT NOT NULL,
+  confidence REAL NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS reflect_suggestions_status ON reflect_suggestions (status, created_at);
 CREATE VIRTUAL TABLE IF NOT EXISTS nodes_fts USING fts5(node_id UNINDEXED, search_text, tokenize='unicode61');
 CREATE INDEX IF NOT EXISTS nodes_scope_status ON nodes (scope, status);
 CREATE INDEX IF NOT EXISTS nodes_kind_created ON nodes (kind, created_at);
@@ -144,12 +158,34 @@ CREATE INDEX IF NOT EXISTS op_log_target ON op_log (target_id);
 CREATE INDEX IF NOT EXISTS op_log_at ON op_log (at);
 `
 
+const REFLECT_SQL = `
+CREATE TABLE IF NOT EXISTS reflect_suggestions (
+  id TEXT PRIMARY KEY,
+  scope TEXT NOT NULL,
+  action TEXT NOT NULL,
+  source_ids_json TEXT NOT NULL,
+  target_id TEXT,
+  content TEXT,
+  reason TEXT,
+  status TEXT NOT NULL,
+  confidence REAL NOT NULL,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS reflect_suggestions_status ON reflect_suggestions (status, created_at);
+`
+
 export function migrate(db: { exec: (sql: string) => void; prepare: (sql: string) => { get: (...args: unknown[]) => unknown; run: (...args: unknown[]) => unknown } }) {
   db.exec("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
   const row = db.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get() as { value: string } | undefined
   if (row) {
     const version = Number(row.value)
     if (!Number.isInteger(version) || version > SCHEMA_VERSION) throw new Error(`memory schema ${row.value} is newer than supported ${SCHEMA_VERSION}`)
+    if (version === 1) {
+      db.exec(REFLECT_SQL)
+      db.prepare("UPDATE meta SET value = ? WHERE key = 'schema_version'").run(String(SCHEMA_VERSION))
+      return
+    }
     if (version < SCHEMA_VERSION) throw new Error(`memory schema migration missing from ${version} to ${SCHEMA_VERSION}`)
     return
   }

@@ -84,6 +84,72 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
       return safe(yield* v3.setProfile(id, ctx.payload.content))
     })
 
+    const v3Rooms = Effect.fn("MemoryHttpApi.v3Rooms")(function* (ctx: { query: { sessionID?: string } }) {
+      const id = yield* resolve(ctx.query.sessionID)
+      if (!id) return []
+      return safe(yield* v3.rooms(id))
+    })
+
+    const v3Audit = Effect.fn("MemoryHttpApi.v3Audit")(function* (ctx: {
+      query: { sessionID?: string; targetID?: string; limit?: number }
+    }) {
+      const id = yield* resolve(ctx.query.sessionID)
+      if (!id) return []
+      return safe(yield* v3.audit(id, { targetID: ctx.query.targetID, limit: ctx.query.limit }))
+    })
+
+    const v3Suggestions = Effect.fn("MemoryHttpApi.v3Suggestions")(function* (ctx: { query: { sessionID?: string } }) {
+      const id = yield* resolve(ctx.query.sessionID)
+      if (!id) return []
+      return safe(yield* v3.suggestions(id))
+    })
+
+    const v3Reflect = Effect.fn("MemoryHttpApi.v3Reflect")(function* (ctx: { query: { sessionID?: string } }) {
+      const id = yield* resolve(ctx.query.sessionID)
+      if (!id) return { created: 0, applied: 0 }
+      return safe(yield* v3.reflect(id))
+    })
+
+    const v3ReflectDecide = Effect.fn("MemoryHttpApi.v3ReflectDecide")(function* (ctx: {
+      query: { sessionID?: string }
+      payload: { id: string; action: "accept" | "reject" }
+    }) {
+      const id = yield* resolve(ctx.query.sessionID)
+      if (!id) return null
+      return safe(yield* v3.decideReflection(id, ctx.payload))
+    })
+
+    const v3Export = Effect.fn("MemoryHttpApi.v3Export")(function* (ctx: {
+      query: { sessionID?: string; format?: "json" | "markdown" }
+    }) {
+      const id = yield* resolve(ctx.query.sessionID)
+      if (!id) return ""
+      return yield* v3.exportMemory(id, { format: ctx.query.format ?? "json" })
+    })
+
+    const v3Backup = Effect.fn("MemoryHttpApi.v3Backup")(function* (ctx: { query: { sessionID?: string } }) {
+      const id = yield* resolve(ctx.query.sessionID)
+      if (!id) return { path: "", bytes: 0 }
+      return safe(yield* v3.backup(id))
+    })
+
+    const v3Import = Effect.fn("MemoryHttpApi.v3Import")(function* (ctx: {
+      query: { sessionID?: string }
+      payload: { data: string }
+    }) {
+      const id = yield* resolve(ctx.query.sessionID)
+      if (!id) return { imported: 0 }
+      return safe(yield* v3.importMemory(id, ctx.payload.data))
+    })
+
+    const v3RebuildEmbeddings = Effect.fn("MemoryHttpApi.v3RebuildEmbeddings")(function* (ctx: {
+      query: { sessionID?: string }
+    }) {
+      const id = yield* resolve(ctx.query.sessionID)
+      if (!id) return { updated: 0, failed: 0 }
+      return safe(yield* v3.rebuildEmbeddings(id))
+    })
+
     const v3Review = Effect.fn("MemoryHttpApi.v3Review")(function* (ctx: { query: { sessionID?: string } }) {
       const id = yield* resolve(ctx.query.sessionID)
       if (!id) return []
@@ -111,6 +177,7 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
     const v3Clear = Effect.fn("MemoryHttpApi.v3Clear")(function* (ctx: { query: { sessionID?: string } }) {
       const id = yield* resolve(ctx.query.sessionID)
       if (!id) return false
+      yield* v3.backup(id)
       yield* v3.clear(id)
       return true
     })
@@ -136,6 +203,15 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
       .handle("v3Nodes", v3Nodes)
       .handle("v3ProfileGet", v3Profile)
       .handle("v3ProfileSet", v3ProfileSet)
+      .handle("v3Rooms", v3Rooms)
+      .handle("v3Audit", v3Audit)
+      .handle("v3Suggestions", v3Suggestions)
+      .handle("v3Reflect", v3Reflect)
+      .handle("v3ReflectDecide", v3ReflectDecide)
+      .handle("v3Export", v3Export)
+      .handle("v3Backup", v3Backup)
+      .handle("v3Import", v3Import)
+      .handle("v3RebuildEmbeddings", v3RebuildEmbeddings)
       .handle("v3ReviewQueue", v3Review)
       .handle("v3ReviewGrade", v3ReviewGrade)
       .handle("v3Mutate", v3Mutate)

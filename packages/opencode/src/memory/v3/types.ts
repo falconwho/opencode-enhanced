@@ -102,3 +102,23 @@ export type SearchHit = {
   ref: string
   via?: { type: EdgeType; from: string }
 }
+
+export const REFLECTION_ACTIONS = ["merge", "supersede", "observe", "link"] as const
+export type ReflectionAction = (typeof REFLECTION_ACTIONS)[number]
+
+export const REFLECTION_STATUSES = ["pending", "accepted", "rejected"] as const
+export type ReflectionStatus = (typeof REFLECTION_STATUSES)[number]
+
+export type ReflectionSuggestion = {
+  id: string
+  scope: MemoryScope
+  action: ReflectionAction
+  sourceIds: string[]
+  targetId?: string
+  content?: string
+  reason?: string
+  status: ReflectionStatus
+  confidence: number
+  createdAt: number
+  updatedAt: number
+}

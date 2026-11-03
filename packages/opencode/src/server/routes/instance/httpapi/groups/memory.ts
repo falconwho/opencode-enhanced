@@ -98,6 +98,56 @@ export const MemoryApi = HttpApi.make("memory").add(
         payload: Schema.Struct({ content: Schema.String }),
         success: described(Schema.Unknown, "Memory v3 profile update"),
       }),
+      HttpApiEndpoint.get("v3Rooms", `${root}/v3/rooms`, {
+        query: MemoryV3Query,
+        success: described(Schema.Unknown, "Memory v3 rooms"),
+      }),
+      HttpApiEndpoint.get("v3Audit", `${root}/v3/audit`, {
+        query: Schema.Struct({
+          ...WorkspaceRoutingQueryFields,
+          sessionID: Schema.optional(Schema.String),
+          targetID: Schema.optional(Schema.String),
+          limit: Schema.optional(Schema.NumberFromString),
+        }),
+        success: described(Schema.Unknown, "Memory v3 audit"),
+      }),
+      HttpApiEndpoint.get("v3Suggestions", `${root}/v3/reflect`, {
+        query: MemoryV3Query,
+        success: described(Schema.Unknown, "Memory v3 reflection suggestions"),
+      }),
+      HttpApiEndpoint.post("v3Reflect", `${root}/v3/reflect/run`, {
+        query: MemoryV3Query,
+        success: described(Schema.Unknown, "Memory v3 reflection run"),
+      }),
+      HttpApiEndpoint.post("v3ReflectDecide", `${root}/v3/reflect/decide`, {
+        query: MemoryV3Query,
+        payload: Schema.Struct({
+          id: Schema.String,
+          action: Schema.Literals(["accept", "reject"]),
+        }),
+        success: described(Schema.Unknown, "Memory v3 reflection decision"),
+      }),
+      HttpApiEndpoint.get("v3Export", `${root}/v3/export`, {
+        query: Schema.Struct({
+          ...WorkspaceRoutingQueryFields,
+          sessionID: Schema.optional(Schema.String),
+          format: Schema.optional(Schema.Literals(["json", "markdown"])),
+        }),
+        success: described(Schema.String, "Memory v3 export"),
+      }),
+      HttpApiEndpoint.post("v3Backup", `${root}/v3/backup`, {
+        query: MemoryV3Query,
+        success: described(Schema.Unknown, "Memory v3 local backup"),
+      }),
+      HttpApiEndpoint.post("v3Import", `${root}/v3/import`, {
+        query: MemoryV3Query,
+        payload: Schema.Struct({ data: Schema.String }),
+        success: described(Schema.Unknown, "Memory v3 import"),
+      }),
+      HttpApiEndpoint.post("v3RebuildEmbeddings", `${root}/v3/rebuild-embeddings`, {
+        query: MemoryV3Query,
+        success: described(Schema.Unknown, "Memory v3 embedding rebuild"),
+      }),
       HttpApiEndpoint.get("v3ReviewQueue", `${root}/v3/review`, {
         query: MemoryV3Query,
         success: described(Schema.Unknown, "Memory v3 review queue"),

@@ -18,6 +18,9 @@ import type {
   MemoryStats,
   MemoryStatus,
   ObservationRecord,
+  ReflectionAction,
+  ReflectionStatus,
+  ReflectionSuggestion,
   ReviewSchedule,
   SaveResult,
   Slot,
@@ -161,6 +164,10 @@ export class MemoryStore {
 
   activeNodes() {
     return (this.db.prepare("SELECT * FROM nodes WHERE status = 'active'").all() as Row[]).map((row) => this.rowNode(row))
+  }
+
+  allNodes() {
+    return (this.db.prepare("SELECT * FROM nodes ORDER BY created_at DESC").all() as Row[]).map((row) => this.rowNode(row))
   }
 
   fts(nodeIDs: string[] | undefined, query: string, limit: number, room?: string) {
@@ -608,6 +615,129 @@ export class MemoryStore {
       .run(Date.now(), sessionID, sliceKey)
   }
 
+  suggestions(input: { status?: ReflectionStatus; limit?: number } = {}) {
+    const limit = Math.min(Math.max(input.limit ?? 50, 1), 200)
+    const rows = input.status
+      ? (this.db.prepare("SELECT * FROM reflect_suggestions WHERE status = ? ORDER BY created_at DESC LIMIT ?").all(input.status, limit) as Row[])
+      : (this.db.prepare("SELECT * FROM reflect_suggestions ORDER BY created_at DESC LIMIT ?").all(limit) as Row[])
+    return rows.map((row) => this.rowSuggestion(row))
+  }
+
+  addSuggestion(input: {
+    scope: MemoryScope
+    action: ReflectionAction
+    sourceIds: string[]
+    targetId?: string
+    content?: string
+    reason?: string
+    confidence: number
+    now?: number
+  }) {
+    const now = input.now ?? Date.now()
+    const id = `ref_${randomUUID()}`
+    this.db
+      .prepare("INSERT INTO reflect_suggestions (id, scope, action, source_ids_json, target_id, content, reason, status, confidence, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)")
+      .run(id, input.scope, input.action, JSON.stringify(input.sourceIds), input.targetId ?? null, input.content ?? null, input.reason ?? null, input.confidence, now, now)
+    this.log("reflect-suggest", id, { action: input.action, scope: input.scope })
+    return this.rowSuggestion(this.db.prepare("SELECT * FROM reflect_suggestions WHERE id = ?").get(id) as Row)
+  }
+
+  decideSuggestion(id: string, status: Exclude<ReflectionStatus, "pending">, now = Date.now()) {
+    this.db.prepare("UPDATE reflect_suggestions SET status = ?, updated_at = ? WHERE id = ?").run(status, now, id)
+    this.log(`reflect-${status}`, id)
+    const row = this.db.prepare("SELECT * FROM reflect_suggestions WHERE id = ?").get(id) as Row | undefined
+    return row ? this.rowSuggestion(row) : undefined
+  }
+
+  setEmbedding(id: string, embedding: Float32Array) {
+    this.db
+      .prepare("UPDATE nodes SET embedding = ? WHERE id = ?")
+      .run(Buffer.from(embedding.buffer, embedding.byteOffset, embedding.byteLength), id)
+  }
+
+  isEmpty() {
+    const tables = ["nodes", "profile_blocks", "entities", "facts", "observations", "session_summaries", "ingest_cursor", "reflect_suggestions"]
+    return tables.every((table) => Number((this.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n) === 0)
+  }
+
+  snapshot() {
+    const tables = [
+      "meta",
+      "profile_blocks",
+      "profile_block_versions",
+      "nodes",
+      "edges",
+      "nodes_revisions",
+      "tour_routes",
+      "entities",
+      "node_entities",
+      "facts",
+      "observations",
+      "session_summaries",
+      "ingest_cursor",
+      "op_log",
+      "reflect_suggestions",
+    ]
+    return Object.fromEntries(tables.map((table) => [table, this.db.prepare(`SELECT * FROM ${table}`).all() as Row[]]))
+  }
+
+  restore(snapshot: Record<string, Row[]>) {
+    this.transaction(() => {
+      for (const table of [
+        "nodes_fts",
+        "node_entities",
+        "edges",
+        "nodes_revisions",
+        "tour_routes",
+        "facts",
+        "observations",
+        "session_summaries",
+        "ingest_pending",
+        "nodes",
+        "embedding_meta",
+        "reflect_suggestions",
+        "profile_block_versions",
+        "profile_blocks",
+        "entities",
+        "ingest_cursor",
+        "op_log",
+      ]) {
+        this.db.prepare(`DELETE FROM ${table}`).run()
+      }
+      for (const [table, rows] of Object.entries(snapshot)) {
+        if (table === "meta" || table === "nodes_fts") continue
+        if (!Array.isArray(rows) || rows.length === 0) continue
+        for (const row of rows) {
+          const keys = Object.keys(row)
+          if (!keys.length) continue
+          this.db
+            .prepare(`INSERT INTO ${table} (${keys.join(", ")}) VALUES (${keys.map(() => "?").join(", ")})`)
+            .run(...keys.map((key) => (row[key] === undefined ? null : row[key])))
+        }
+      }
+      this.db.prepare("DELETE FROM nodes_fts").run()
+      for (const row of this.db.prepare("SELECT id, content FROM nodes").all() as Array<{ id: string; content: string }>) {
+        this.db.prepare("INSERT INTO nodes_fts (node_id, search_text) VALUES (?, ?)").run(row.id, searchText(row.content))
+      }
+    })
+  }
+
+  private rowSuggestion(row: Row): ReflectionSuggestion {
+    return {
+      id: row.id as string,
+      scope: row.scope as MemoryScope,
+      action: row.action as ReflectionAction,
+      sourceIds: JSON.parse(row.source_ids_json as string) as string[],
+      targetId: (row.target_id as string | null) ?? undefined,
+      content: (row.content as string | null) ?? undefined,
+      reason: (row.reason as string | null) ?? undefined,
+      status: row.status as ReflectionStatus,
+      confidence: Number(row.confidence),
+      createdAt: Number(row.created_at),
+      updatedAt: Number(row.updated_at),
+    }
+  }
+
   clear() {
     this.transaction(() => {
       for (const table of [
@@ -622,6 +752,12 @@ export class MemoryStore {
         "ingest_pending",
         "nodes",
         "embedding_meta",
+        "reflect_suggestions",
+        "profile_block_versions",
+        "profile_blocks",
+        "entities",
+        "ingest_cursor",
+        "op_log",
       ]) {
         this.db.prepare(`DELETE FROM ${table}`).run()
       }
