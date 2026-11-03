@@ -111,7 +111,7 @@ function cleanSnapshot(snapshot: Snapshot): Snapshot {
   return next
 }
 
-function parseReflection(raw: string): ReflectionInput[] {
+export function parseReflection(raw: string): ReflectionInput[] {
   const cleaned = raw.replace(/```(?:json)?/gi, "").trim()
   const start = cleaned.indexOf("{")
   const end = cleaned.lastIndexOf("}")
