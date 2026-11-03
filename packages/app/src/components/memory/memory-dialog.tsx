@@ -271,7 +271,8 @@ export const MemoryDialog: Component<{ sessionID?: string; directory?: string }>
       const result = (await request("/memory/v3/import", {
         method: "POST",
         body: JSON.stringify({ data }),
-      })) as { imported?: number }
+      })) as { imported?: number; error?: string }
+      if (result.error) throw new Error(result.error)
       refresh()
       showToast({ title: `恢复完成：${result.imported ?? 0} 个节点` })
     } catch (error) {
