@@ -6,6 +6,6 @@ export function resolveAgent<T extends { name: string }>(items: T[], name?: stri
   return items.find((item) => item.name === name) ?? items.find((item) => item.name === "build") ?? items[0]
 }
 
-export function resolveActiveAgent<T extends { name: string }>(items: T[], name?: string) {
-  return resolveAgent(items, name ?? "build")
+export function resolveActiveAgent<T extends { name: string }>(items: T[], name?: string, fallback?: string) {
+  return resolveAgent(items, name ?? fallback ?? "build")
 }

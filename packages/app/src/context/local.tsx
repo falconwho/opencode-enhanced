@@ -167,11 +167,25 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
 
     const fallback = createMemo<ModelKey | undefined>(() => configuredModel() ?? recentModel() ?? defaultModel())
 
+    const sessionAgent = createMemo(() => {
+      const session = id()
+      if (!session) return
+      const info = sync().data.session.find((item) => item.id === session)
+      if (info?.agent) return info.agent
+
+      const messages = sync().data.message[session]
+      if (!messages) return
+      for (let index = messages.length - 1; index >= 0; index--) {
+        const message = messages[index]
+        if (message?.role === "user" && message.agent) return message.agent
+      }
+    })
+
     const agent = {
       list,
       visible: agentsVisible,
       current() {
-        return resolveActiveAgent(list(), agentsVisible() ? scope()?.agent : undefined)
+        return resolveActiveAgent(list(), agentsVisible() ? (scope()?.agent ?? sessionAgent()) : undefined)
       },
       set(name: string | undefined) {
         const item = pickAgent(name)

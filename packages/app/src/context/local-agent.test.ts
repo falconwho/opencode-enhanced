@@ -31,11 +31,19 @@ describe("resolveAgent", () => {
 describe("resolveActiveAgent", () => {
   const agents = [{ name: "plan" }, { name: "build" }, { name: "custom" }]
 
-  test("uses build for a session without its own agent instead of the last selection", () => {
+  test("uses build for a session without its own agent or fallback", () => {
     expect(resolveActiveAgent(agents, undefined)?.name).toBe("build")
   })
 
   test("keeps an explicitly selected session agent", () => {
-    expect(resolveActiveAgent(agents, "plan")?.name).toBe("plan")
+    expect(resolveActiveAgent(agents, "plan", "build")?.name).toBe("plan")
+  })
+
+  test("uses the session fallback when local selection is missing", () => {
+    expect(resolveActiveAgent(agents, undefined, "plan")?.name).toBe("plan")
+  })
+
+  test("uses build when the session fallback is unavailable", () => {
+    expect(resolveActiveAgent(agents, undefined, "missing")?.name).toBe("build")
   })
 })
