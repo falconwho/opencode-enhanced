@@ -65,6 +65,7 @@ import { partDefaultOpen } from "./part-default-open"
 import { animate } from "motion"
 import { attached, inline, kind, typeLabel } from "./message-file"
 import { readPartText } from "./message-part-text"
+import { formatMessageDate } from "./message-date"
 import { SessionProgressIndicatorV2 } from "../v2/components/session-progress-indicator-v2"
 
 async function writeClipboard(text: string): Promise<boolean> {
@@ -1229,6 +1230,7 @@ export function UserMessageDisplay(props: {
     if (typeof created !== "number") return ""
     return timefmt().format(created)
   })
+  const dateStamp = createMemo(() => formatMessageDate(props.message.time?.created))
 
   const metaHead = createMemo(() => {
     const agent = props.message.agent
@@ -1236,7 +1238,7 @@ export function UserMessageDisplay(props: {
     return items.filter((x) => !!x).join("\u00A0\u00B7\u00A0")
   })
 
-  const metaTail = stamp
+  const metaTail = createMemo(() => [dateStamp(), stamp()].filter(Boolean).join("\u00A0\u00B7\u00A0"))
 
   const openImagePreview = (url: string, alt?: string) => {
     dialog.show(() => <ImagePreview src={url} alt={alt} />)
