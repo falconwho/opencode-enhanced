@@ -14,7 +14,7 @@ import { createResizeObserver } from "@solid-primitives/resize-observer"
 import { createStore } from "solid-js/store"
 import { useI18n } from "../context/i18n"
 
-export type ScrollViewThumbVisibility = "hover" | "scroll"
+export type ScrollViewThumbVisibility = "hover" | "scroll" | "always"
 
 export interface ScrollViewProps extends ComponentProps<"div"> {
   viewportRef?: (el: HTMLDivElement) => void
@@ -161,6 +161,7 @@ export function ScrollView(props: ScrollViewProps) {
   }
 
   const thumbVisible = () => {
+    if (local.thumbVisibility === "always") return true
     if (isDragging()) return true
     if (isScrolling()) return true
     return local.thumbVisibility === "hover" && isHovered()

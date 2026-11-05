@@ -1,4 +1,4 @@
-import { createMemo, For, Show } from "solid-js"
+import { createEffect, createMemo, For, on, Show } from "solid-js"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { useLanguage } from "@/context/language"
 import { useSync } from "@/context/sync"
@@ -11,6 +11,8 @@ import { isSyntheticAgentsReminderMessage } from "@/utils/synthetic-user-message
 export function SessionMessageNavigator(props: { sessionID?: string; onJump?: (messageID: string) => void }) {
   const sync = useSync()
   const language = useLanguage()
+  let scrollRef: HTMLDivElement | undefined
+  let seenSession: string | undefined
 
   const items = createMemo(() => {
     const id = props.sessionID
@@ -41,9 +43,26 @@ export function SessionMessageNavigator(props: { sessionID?: string; onJump?: (m
     }, 1600)
   }
 
+  createEffect(
+    on(
+      () => [props.sessionID, items().length] as const,
+      ([sessionID, count]) => {
+        if (!sessionID || count === 0 || seenSession === sessionID) return
+        seenSession = sessionID
+        requestAnimationFrame(() => {
+          if (!scrollRef) return
+          scrollRef.scrollTop = scrollRef.scrollHeight
+        })
+      },
+    ),
+  )
+
   return (
     <Show when={items().length > 0}>
       <div
+        ref={(el) => {
+          scrollRef = el
+        }}
         data-component="session-message-navigator"
         class="compact-scrollbar absolute left-1 top-1/2 z-10 hidden max-h-[60%] w-[150px] -translate-y-1/2 flex-col gap-0.5 overflow-y-auto rounded-md border border-border-weak-base bg-background-base/95 p-1.5 shadow-md lg:flex"
       >

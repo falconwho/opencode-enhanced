@@ -53,6 +53,22 @@ export function getCursorPosition(parent: HTMLElement): number {
   return getTextLength(preCaretRange.cloneContents())
 }
 
+export function getMentionRange(parent: HTMLElement): { range: Range; query: string } | undefined {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return
+  const current = selection.getRangeAt(0)
+  if (!current.collapsed || !parent.contains(current.startContainer)) return
+  const node = current.startContainer
+  if (node.nodeType !== Node.TEXT_NODE) return
+  const text = node.textContent ?? ""
+  const match = text.slice(0, current.startOffset).match(/@(\S*)$/)
+  if (!match) return
+  const range = document.createRange()
+  range.setStart(node, current.startOffset - match[0].length)
+  range.setEnd(node, current.startOffset)
+  return { range, query: match[1] }
+}
+
 export function setCursorPosition(parent: HTMLElement, position: number) {
   // opencode-enhanced: guard against corrupted persisted cursor offsets (e.g.
   // -3 from stale drafts) - a negative offset used to blow up Range.setStart
@@ -120,37 +136,4 @@ export function setCursorPosition(parent: HTMLElement, position: number) {
   fallbackRange.collapse(false)
   fallbackSelection?.removeAllRanges()
   fallbackSelection?.addRange(fallbackRange)
-}
-
-export function setRangeEdge(parent: HTMLElement, range: Range, edge: "start" | "end", offset: number) {
-  // opencode-enhanced: same negative-offset guard as setCursorPosition.
-  let remaining = Math.max(0, Math.floor(offset))
-  const nodes = Array.from(parent.childNodes)
-
-  for (const node of nodes) {
-    const length = getNodeLength(node)
-    const isText = node.nodeType === Node.TEXT_NODE
-    const isPill =
-      node.nodeType === Node.ELEMENT_NODE &&
-      ((node as HTMLElement).dataset.type === "file" ||
-        (node as HTMLElement).dataset.type === "agent" ||
-        (node as HTMLElement).dataset.type === "session")
-    const isBreak = node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).tagName === "BR"
-
-    if (isText && remaining <= length) {
-      if (edge === "start") range.setStart(node, remaining)
-      if (edge === "end") range.setEnd(node, remaining)
-      return
-    }
-
-    if ((isPill || isBreak) && remaining <= length) {
-      if (edge === "start" && remaining === 0) range.setStartBefore(node)
-      if (edge === "start" && remaining > 0) range.setStartAfter(node)
-      if (edge === "end" && remaining === 0) range.setEndBefore(node)
-      if (edge === "end" && remaining > 0) range.setEndAfter(node)
-      return
-    }
-
-    remaining -= length
-  }
 }

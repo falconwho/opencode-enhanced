@@ -72,11 +72,8 @@ const MutateParameters = Schema.Struct({
   importance: Schema.optional(Schema.Number),
 })
 
-const ReviewParameters = Schema.Struct({
-  action: Schema.Literals(["queue", "inspect", "grade"]),
-  id: Schema.optional(Schema.String),
-  grade: Schema.optional(Schema.Number),
-  limit: Schema.optional(Schema.Number),
+const DistillParameters = Schema.Struct({
+  scope: Schema.optional(Schema.Literals(["user", "project", "shared", "all"])),
 })
 
 const NavigateParameters = Schema.Struct({
@@ -241,17 +238,21 @@ export const MemoryMutateTool = Tool.define(
   }),
 )
 
-export const MemoryReviewTool = Tool.define(
-  "memory_review",
+export const MemoryDistillTool = Tool.define(
+  "memory_distill",
   Effect.gen(function* () {
     const memory = yield* Service
     return {
-      description: "Review due memories, inspect one memory's audit trail, or grade recall from 0 to 5.",
-      parameters: ReviewParameters,
-      execute: (params: Schema.Schema.Type<typeof ReviewParameters>, ctx: Tool.Context) =>
+      description: "Consolidate related memories into higher-level fact or skill entries and archive the sources.",
+      parameters: DistillParameters,
+      execute: (params: Schema.Schema.Type<typeof DistillParameters>, ctx: Tool.Context) =>
         Effect.gen(function* () {
-          yield* ctx.ask({ permission: "memory_review", patterns: [params.id ?? "*"], always: ["*"], metadata: {} })
-          return output(yield* memory.review(ctx.sessionID, params), "memory review")
+          yield* ctx.ask({ permission: "memory_distill", patterns: [params.scope ?? "all"], always: ["*"], metadata: {} })
+          const result =
+            params.scope === "all" || params.scope === undefined
+              ? yield* memory.distillAll()
+              : yield* memory.distill(ctx.sessionID, params.scope)
+          return output(result, "memory distill")
         }),
     }
   }),
@@ -281,6 +282,6 @@ export const MemoryV3Tools = [
   MemoryAssessTool,
   MemoryTimelineTool,
   MemoryMutateTool,
-  MemoryReviewTool,
+  MemoryDistillTool,
   MemoryNavigateTool,
 ]

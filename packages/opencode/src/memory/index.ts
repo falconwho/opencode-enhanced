@@ -10,6 +10,7 @@ import path from "path"
 import { Agent } from "@/agent/agent"
 import { Config } from "@/config/config"
 import { Provider } from "@/provider/provider"
+import { normalizeReasoningEffort } from "@/provider/reasoning"
 import { LLM } from "@/session/llm"
 import { Session } from "@/session/session"
 import { MessageID, SessionID } from "@/session/schema"
@@ -44,7 +45,7 @@ export interface Interface {
   readonly file: () => string
   readonly read: () => Effect.Effect<string>
   readonly clear: () => Effect.Effect<void>
-  readonly configure: (input: { model?: string; effort?: "low" | "medium" | "high" }) => Effect.Effect<void>
+  readonly configure: (input: { model?: string; effort?: string }) => Effect.Effect<void>
   readonly systemSummary: (sessionID: SessionID) => Effect.Effect<string | undefined>
   readonly startup: (currentSessionID: SessionID) => Effect.Effect<void>
   readonly extract: (sessionID: SessionID) => Effect.Effect<void>
@@ -66,7 +67,7 @@ function memoryRoot() {
   return path.join(Global.Path.data, "memory")
 }
 
-type Judgment = { model?: string; effort?: "low" | "medium" | "high" }
+type Judgment = { model?: string; effort?: string }
 
 function redactSecrets(value: string) {
   return value
@@ -188,9 +189,8 @@ const layer = Layer.effect(
         if (!agent) return ""
         const model = yield* resolveModel(agent)
         if (!model) return ""
-        const runAgent = judgment.effort
-          ? { ...agent, options: { ...agent.options, reasoningEffort: judgment.effort } }
-          : agent
+        const effort = normalizeReasoningEffort(model, judgment.effort)
+        const runAgent = effort ? { ...agent, options: { ...agent.options, reasoningEffort: effort } } : agent
         const user: SessionV1.User = {
           id: MessageID.ascending(),
           sessionID: sessionID as SessionV1.User["sessionID"],
@@ -241,7 +241,7 @@ const layer = Layer.effect(
 
     const configure = Effect.fn("Memory.configure")(function* (input: {
       model?: string
-      effort?: "low" | "medium" | "high"
+      effort?: string
     }) {
       judgment.model = input.model?.trim() ? input.model.trim() : undefined
       judgment.effort = input.effort

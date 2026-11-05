@@ -4,6 +4,7 @@ import { Tabs } from "@opencode-ai/ui/tabs"
 import { Icon } from "@opencode-ai/ui/icon"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
+import { appRelease } from "@/utils/app-release"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { SettingsGeneral } from "./settings-general"
 import { SettingsKeybinds } from "./settings-keybinds"
@@ -14,6 +15,7 @@ import { SettingsServers } from "./settings-servers"
 export const DialogSettings: Component<{ defaultValue?: string }> = (props) => {
   const language = useLanguage()
   const platform = usePlatform()
+  const release = appRelease(platform.version)
   const dialog = useDialog()
   const [tab, setTab] = createSignal(props.defaultValue ?? "general")
 
@@ -68,12 +70,8 @@ export const DialogSettings: Component<{ defaultValue?: string }> = (props) => {
               </div>
             </div>
             <div class="flex flex-col gap-1 pl-1 py-1 text-12-medium text-text-weak">
-              <span>{language.t("app.name.desktop")}</span>
-              {/* opencode-enhanced: release marker set at build time via
-                  VITE_OPENCODE_ENHANCED_RELEASE (e.g. v1.18.10-enhanced.3). */}
-              <span class="text-11-regular">
-                {(import.meta.env?.VITE_OPENCODE_ENHANCED_RELEASE as string | undefined) ?? `v${platform.version}`}
-              </span>
+              <span>{release.name}</span>
+              <span class="text-11-regular">({release.enhanced})</span>
             </div>
           </div>
         </Tabs.List>

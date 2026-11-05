@@ -12,6 +12,7 @@ export type SearchInput = {
   embedding?: Float32Array
   room?: string
   limit?: number
+  touch?: boolean
 }
 
 export type SearchResult = {
@@ -62,6 +63,7 @@ export function searchMemory(input: SearchInput): SearchResult {
     .slice(0, limit)
     .map((item) => item.hit)
   for (const { store } of input.stores) {
+    if (input.touch === false) continue
     for (const hit of hits) {
       if (hit.node.scope === store.scope) store.touch(hit.node.id)
     }

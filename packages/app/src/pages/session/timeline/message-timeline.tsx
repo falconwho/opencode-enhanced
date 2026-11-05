@@ -1084,7 +1084,7 @@ export function MessageTimeline(props: {
           "md:max-w-200 2xl:max-w-[1000px]": props.centered,
           "md:mx-auto": props.centered,
           "pt-3": previousAssistantPart() && !toolPartRow(),
-          "pt-1": previousAssistantPart() && toolPartRow(),
+          "pt-0.5": previousAssistantPart() && toolPartRow(),
         }}
       >
         <div data-component="session-turn" class="min-w-0 w-full relative" style={{ height: "auto" }}>
@@ -1392,6 +1392,7 @@ export function MessageTimeline(props: {
         onScroll={handleListScroll}
         onClick={props.onAutoScrollInteraction}
         class="session-timeline-scroll relative min-w-0 w-full h-full"
+        thumbVisibility="always"
         style={{
           "--sticky-accordion-top": showHeader() ? "48px" : "0px",
         }}

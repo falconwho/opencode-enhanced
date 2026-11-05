@@ -1,13 +1,14 @@
 import { Config } from "@/config/config"
 import { Agent } from "@/agent/agent"
 import { Provider } from "@/provider/provider"
+import { normalizeReasoningEffort } from "@/provider/reasoning"
 import { LLM } from "@/session/llm"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { MessageID } from "@/session/schema"
 import { LLMEvent } from "@opencode-ai/llm"
 import { Session } from "@/session/session"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { Context, Effect, Layer, Stream } from "effect"
+import { Context, Cause, Deferred, Duration, Effect, Layer, Schedule, Stream } from "effect"
 import { createHash, randomUUID } from "node:crypto"
 import fs from "node:fs/promises"
 import path from "node:path"
@@ -16,7 +17,9 @@ import { memoryRoot, databasePath, projectKey, v3Root } from "./paths"
 import { migrateV2 } from "./migrate"
 import { renderMemoryPacket, renderProfilePacket } from "./security"
 import { searchMemory, type SearchStore } from "./search"
+import { mergeQueryResults, parseRewriteOutput, rewritePrompt } from "./rewrite"
 import { MemoryStore, type SaveInput } from "./store"
+import { distillStore, type DistillOutcome } from "./distill"
 import { SCHEMA_VERSION } from "./schema"
 import type {
   MemoryKind,
@@ -50,8 +53,15 @@ export type MemoryBatch = {
   at: number
 }
 
+export type IngestResult = {
+  saved: number
+  skipped: boolean
+  failed: boolean
+}
+
 export interface Interface {
   readonly enabled: () => Effect.Effect<boolean>
+  readonly configure: (input: { model?: string; effort?: string }) => Effect.Effect<void>
   readonly root: () => string
   readonly latestSessionID: () => Effect.Effect<string | undefined>
   readonly context: (sessionID: string) => Effect.Effect<MemoryContext | undefined>
@@ -64,7 +74,6 @@ export interface Interface {
   readonly mutate: (sessionID: string, input: { id: string; action: "update" | "forget" | "archive" | "restore"; content?: string; kind?: MemoryKind; importance?: number }) => Effect.Effect<unknown>
   readonly timeline: (sessionID: string, input: { since?: number; until?: number; limit?: number; order?: "recent" | "tour"; room?: string }) => Effect.Effect<unknown[]>
   readonly facts: (sessionID: string, input: Record<string, unknown>) => Effect.Effect<unknown>
-  readonly review: (sessionID: string, input: { action: "queue" | "inspect" | "grade"; id?: string; grade?: number; limit?: number }) => Effect.Effect<unknown>
   readonly navigate: (sessionID: string, input: { mode: "neighbors" | "tour"; id?: string; hops?: number; limit?: number }) => Effect.Effect<unknown>
   readonly stats: (sessionID: string) => Effect.Effect<MemoryStats>
   readonly profile: (sessionID: string) => Effect.Effect<unknown>
@@ -73,6 +82,8 @@ export interface Interface {
   readonly audit: (sessionID: string, input: { limit?: number; targetID?: string }) => Effect.Effect<unknown[]>
   readonly suggestions: (sessionID: string, input?: { status?: ReflectionStatus; limit?: number }) => Effect.Effect<ReflectionSuggestion[]>
   readonly reflect: (sessionID: string) => Effect.Effect<{ created: number; applied: number }>
+  readonly distill: (sessionID: string, scope?: MemoryScope) => Effect.Effect<DistillOutcome>
+  readonly distillAll: () => Effect.Effect<DistillOutcome>
   readonly decideReflection: (sessionID: string, input: { id: string; action: "accept" | "reject" }) => Effect.Effect<unknown>
   readonly replayPending: (sessionID: string) => Effect.Effect<{ replayed: number; failed: number }>
   readonly exportMemory: (sessionID: string, input: { format: "json" | "markdown" }) => Effect.Effect<string>
@@ -80,7 +91,7 @@ export interface Interface {
   readonly importMemory: (sessionID: string, data: string) => Effect.Effect<{ imported: number }>
   readonly rebuildEmbeddings: (sessionID: string) => Effect.Effect<{ updated: number; failed: number }>
   readonly clear: (sessionID?: string) => Effect.Effect<void>
-  readonly ingest: (sessionID: string, reason: "final" | "checkpoint" | "pending") => Effect.Effect<void>
+  readonly ingest: (sessionID: string, reason: "final" | "checkpoint" | "pending") => Effect.Effect<IngestResult>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/MemoryV3") {}
@@ -155,15 +166,24 @@ const layer = Layer.effect(
     const agents = yield* Agent.Service
     const provider = yield* Provider.Service
     const llm = yield* LLM.Service
+    const judgment: { model?: string; effort?: string } = {}
+    let distillRunning = false
+
+    const configure = Effect.fn("MemoryV3.configure")(function* (input: { model?: string; effort?: string }) {
+      judgment.model = input.model?.trim() ? input.model.trim() : undefined
+      judgment.effort = input.effort
+    })
 
     const config = Effect.fnUntraced(function* () {
       const raw = (yield* cfg.get()) as {
         experimental?: { memory?: boolean }
         memory?: {
           ingest?: "off" | "light" | "eager"
+          ingestMinChars?: number
+          distill?: "off" | "weekly"
+          queryRewrite?: boolean
           reflect?: "off" | "suggest" | "auto"
           autoSlot?: boolean
-          reviewScheduling?: boolean
           mergeThreshold?: number
           deferThreshold?: number
         }
@@ -171,9 +191,11 @@ const layer = Layer.effect(
       return {
         enabled: raw.experimental?.memory === true,
         ingest: raw.memory?.ingest ?? "light",
+        ingestMinChars: raw.memory?.ingestMinChars ?? 20,
+        distill: raw.memory?.distill ?? "weekly",
+        queryRewrite: raw.memory?.queryRewrite ?? true,
         reflect: raw.memory?.reflect ?? "suggest",
         autoSlot: raw.memory?.autoSlot ?? true,
-        reviewScheduling: raw.memory?.reviewScheduling ?? true,
         mergeThreshold: raw.memory?.mergeThreshold ?? 0.92,
         deferThreshold: raw.memory?.deferThreshold ?? 0.84,
       }
@@ -191,7 +213,6 @@ const layer = Layer.effect(
         const settings = yield* config()
         pending = MemoryStore.open(file, scope, {
           autoSlot: settings.autoSlot,
-          reviewScheduling: settings.reviewScheduling,
           mergeThreshold: settings.mergeThreshold,
           deferThreshold: settings.deferThreshold,
         })
@@ -218,7 +239,6 @@ const layer = Layer.effect(
         .sort((a, b) => b.importance * 0.6 + b.confidence * 0.4 - (a.importance * 0.6 + a.confidence * 0.4))
         .slice(0, 16)
       const observations = [...user.observations(3), ...project.observations(3)].slice(0, 3)
-      const due = user.reviewQueue(Date.now(), 1).length + project.reviewQueue(Date.now(), 1).length
       const rooms = [...user.stats().rooms, ...project.stats().rooms]
       const memory = [
         rooms.length ? `Rooms: ${rooms.map((room) => `${room.room}#${room.count}`).join(", ")}` : "",
@@ -227,7 +247,6 @@ const layer = Layer.effect(
             `- [${node.scope}/${node.kind}]${node.slot ? ` ${node.slot.room}#${node.slot.index}` : ""} ${node.content.slice(0, 500)}`,
         ),
         ...observations.map((item) => `- [belief] ${item.belief}`),
-        due ? `Review due: ${due}` : "",
       ]
         .filter(Boolean)
         .join("\n")
@@ -253,27 +272,50 @@ const layer = Layer.effect(
     })
 
     const search = Effect.fn("MemoryV3.search")(function* (sessionID: string, input: MemorySearchInput) {
-      const queryEmbedding = yield* Effect.tryPromise(() => embed([input.query])).pipe(
+      const settings = yield* config()
+      let queries = [input.query]
+      if (settings.queryRewrite) {
+        const raw = yield* memoryCall(sessionID, rewritePrompt(input.query)).pipe(
+          Effect.timeoutOrElse({ duration: "3 seconds", orElse: () => Effect.succeed("") }),
+        )
+        const rewritten = parseRewriteOutput(raw)
+        queries = [...new Set([input.query, ...rewritten])].slice(0, 3)
+      }
+      const embeddings = yield* Effect.tryPromise(() => embed(queries)).pipe(
         Effect.timeoutOrElse({ duration: "5 seconds", orElse: () => Effect.succeed(undefined) }),
         Effect.catch(() => Effect.succeed(undefined)),
       )
-      const vector = queryEmbedding?.[0]
-      const result = searchMemory({
-        query: input.query,
-        stores: yield* storesFor(sessionID, input.scope),
-        embedding: vector,
-        room: input.room,
-        limit: input.limit,
-      })
+      const stores = yield* storesFor(sessionID, input.scope)
+      const retrievals = queries.map((query, index) =>
+        searchMemory({
+          query,
+          stores,
+          embedding: embeddings?.[index],
+          room: input.room,
+          limit: input.limit,
+          touch: false,
+        }),
+      )
+      const hits = mergeQueryResults(
+        retrievals,
+        Math.min(Math.max(input.limit ?? 8, 1), 50),
+        Math.max(1, Math.floor(Math.max(1, input.limit ?? 8) / Math.max(1, queries.length))),
+      )
+      for (const { store } of stores) {
+        for (const hit of hits) {
+          if (hit.node.scope === store.scope) store.touch(hit.node.id)
+        }
+      }
+      const degraded = !embeddings || retrievals.some((item) => item.degraded)
       let batchID: string | undefined
-      if (result.hits.length) {
-        const batch: MemoryBatch = { id: randomUUID(), refs: new Set(result.hits.map((hit) => hit.ref)), at: Date.now() }
+      if (hits.length) {
+        const batch: MemoryBatch = { id: randomUUID(), refs: new Set(hits.map((hit) => hit.ref)), at: Date.now() }
         const list = batches.get(sessionID) ?? []
         list.push(batch)
         batches.set(sessionID, list.slice(-20))
         batchID = batch.id
       }
-      return { hits: result.hits, degraded: result.degraded, batchID }
+      return { hits, degraded, batchID }
     })
 
     const assess = Effect.fn("MemoryV3.assess")(function* (
@@ -303,7 +345,6 @@ const layer = Layer.effect(
         ...input,
         embedding,
         autoSlot: settings.autoSlot,
-        reviewScheduling: settings.reviewScheduling,
       })
       if (embedding) target.setEmbeddingMeta(LOCAL_MODEL, embedding.length)
       return result
@@ -354,22 +395,6 @@ const layer = Layer.effect(
       return project.factsOfEntity(input as { entity?: string; entityId?: string; asOf?: number; includeInvalid?: boolean; limit?: number })
     })
 
-    const review = Effect.fn("MemoryV3.review")(function* (
-      sessionID: string,
-      input: { action: "queue" | "inspect" | "grade"; id?: string; grade?: number; limit?: number },
-    ) {
-      const all = yield* storesFor(sessionID, "all")
-      if (input.action === "queue") return all.flatMap(({ store }) => store.reviewQueue(Date.now(), input.limit ?? 20))
-      if (input.action === "grade" && input.id && input.grade !== undefined) {
-        for (const { store } of all) {
-          if (store.getNode(input.id)) return store.gradeReview(input.id, input.grade)
-        }
-      }
-      if (input.action === "inspect" && input.id) {
-        return all.flatMap(({ scope, store }) => store.audit(input.limit ?? 50, input.id).map((entry) => ({ ...entry, scope })))
-      }
-    })
-
     const navigate = Effect.fn("MemoryV3.navigate")(function* (
       sessionID: string,
       input: { mode: "neighbors" | "tour"; id?: string; hops?: number; limit?: number },
@@ -408,13 +433,12 @@ const layer = Layer.effect(
           total: acc.total + item.total,
           active: acc.active + item.active,
           archived: acc.archived + item.archived,
-          due: acc.due + item.due,
           byKind: Object.fromEntries(
             [...new Set([...Object.keys(acc.byKind), ...Object.keys(item.byKind)])].map((key) => [key, (acc.byKind[key] ?? 0) + (item.byKind[key] ?? 0)]),
           ),
           rooms: [...acc.rooms, ...item.rooms],
         }),
-        { total: 0, active: 0, archived: 0, due: 0, byKind: {}, rooms: [] } as MemoryStats,
+        { total: 0, active: 0, archived: 0, byKind: {}, rooms: [] } as MemoryStats,
       )
     })
 
@@ -711,12 +735,19 @@ const layer = Layer.effect(
       Effect.gen(function* () {
         const agent = yield* agents.get("memory").pipe(Effect.catch(() => Effect.succeed(undefined)))
         if (!agent) return ""
-        const ref = agent.model ?? (yield* provider.defaultModel().pipe(Effect.catch(() => Effect.succeed(undefined))))
-        if (!ref) return ""
-        const model = yield* provider
-          .getModel(ref.providerID, ref.modelID)
-          .pipe(Effect.catch(() => Effect.succeed(undefined)))
+        const fallback = yield* provider.defaultModel().pipe(Effect.catch(() => Effect.succeed(undefined)))
+        const refs = [
+          judgment.model ? Provider.parseModel(judgment.model) : undefined,
+          agent.model,
+          fallback,
+        ].filter((ref): ref is NonNullable<ReturnType<typeof Provider.parseModel>> => !!ref)
+        if (!refs.length) return ""
+        const model = yield* Effect.firstSuccessOf(
+          refs.map((ref) => provider.getModel(ref.providerID, ref.modelID)),
+        ).pipe(Effect.catch(() => Effect.succeed(undefined)))
         if (!model) return ""
+        const effort = normalizeReasoningEffort(model, judgment.effort)
+        const runAgent = effort ? { ...agent, options: { ...agent.options, reasoningEffort: effort } } : agent
         const user: SessionV1.User = {
           id: MessageID.ascending(),
           sessionID: sessionID as never,
@@ -727,7 +758,7 @@ const layer = Layer.effect(
         }
         return yield* llm
           .stream({
-            agent,
+            agent: runAgent,
             user,
             system: [],
             small: true,
@@ -744,6 +775,86 @@ const layer = Layer.effect(
             Effect.catchCause(() => Effect.succeed("")),
           )
       })
+
+    const emptyDistill = (): DistillOutcome => ({ input: 0, distilled: 0, superseded: 0, failed: 0 })
+    const distillCall = (sessionID: string, prompt: string) =>
+      memoryCall(sessionID, prompt).pipe(
+        Effect.timeoutOrElse({ duration: "15 seconds", orElse: () => Effect.succeed("") }),
+      )
+    const distill = Effect.fn("MemoryV3.distill")(function* (sessionID: string, scope: MemoryScope = "project") {
+      const settings = yield* config()
+      if (!settings.enabled) return emptyDistill()
+      const target = yield* store(sessionID, scope)
+      return yield* distillStore(target, (prompt) => distillCall(sessionID, prompt)).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logError("memory distill failed", { scope, cause: Cause.pretty(cause) }).pipe(Effect.as(emptyDistill())),
+        ),
+      )
+    })
+
+    const distillAll = Effect.fn("MemoryV3.distillAll")(function* () {
+      const settings = yield* config()
+      if (!settings.enabled || distillRunning) return emptyDistill()
+      distillRunning = true
+      const sessionID = yield* latestSessionID()
+      if (!sessionID) {
+        distillRunning = false
+        return emptyDistill()
+      }
+      const opened: MemoryStore[] = []
+      const options = {
+        autoSlot: settings.autoSlot,
+        mergeThreshold: settings.mergeThreshold,
+        deferThreshold: settings.deferThreshold,
+      }
+      const open = (file: string, scope: MemoryScope) =>
+        Effect.tryPromise(() => MemoryStore.open(file, scope, options)).pipe(Effect.orDie)
+      const run = Effect.gen(function* () {
+        const user = yield* open(databasePath("user"), "user")
+        opened.push(user)
+        const shared = yield* open(databasePath("shared"), "shared")
+        opened.push(shared)
+        const files = yield* Effect.tryPromise(() => fs.readdir(v3Root())).pipe(
+          Effect.catch(() => Effect.succeed([] as string[])),
+        )
+        const projects: MemoryStore[] = []
+        for (const name of files.filter((file) => /^project-.*\.db$/.test(file)).sort()) {
+          const project = yield* open(path.join(v3Root(), name), "project")
+          opened.push(project)
+          projects.push(project)
+        }
+        const results: DistillOutcome[] = []
+        for (const target of [user, shared, ...projects]) {
+          results.push(
+            yield* distillStore(target, (prompt) => distillCall(sessionID, prompt)).pipe(
+              Effect.catchCause((cause) =>
+                Effect.logError("memory distill store failed", { cause: Cause.pretty(cause) }).pipe(
+                  Effect.as(emptyDistill()),
+                ),
+              ),
+            ),
+          )
+        }
+        user.setMeta("distill_last_at", String(Date.now()))
+        return results.reduce(
+          (acc, item) => ({
+            input: acc.input + item.input,
+            distilled: acc.distilled + item.distilled,
+            superseded: acc.superseded + item.superseded,
+            failed: acc.failed + item.failed,
+          }),
+          emptyDistill(),
+        )
+      })
+      return yield* run.pipe(
+        Effect.ensuring(
+          Effect.sync(() => {
+            distillRunning = false
+            opened.forEach((item) => item.close())
+          }),
+        ),
+      )
+    })
 
     const extractTranscript = Effect.fn("MemoryV3.extractTranscript")(function* (
       sessionID: string,
@@ -786,27 +897,48 @@ const layer = Layer.effect(
       return { saved, failed: false }
     })
 
-    const ingest = Effect.fn("MemoryV3.ingest")(function* (sessionID: string, reason: "final" | "checkpoint" | "pending") {
+    const ingestNow = Effect.fn("MemoryV3.ingestNow")(function* (
+      sessionID: string,
+      reason: "final" | "checkpoint" | "pending",
+    ) {
       const settings = yield* config()
-      if (!settings.enabled || settings.ingest === "off") return
+      if (!settings.enabled || settings.ingest === "off") return { saved: 0, skipped: true, failed: false }
       if (reason !== "pending") yield* replayPending(sessionID).pipe(Effect.ignore)
       const project = yield* store(sessionID, "project")
       const messages = yield* sessions.messages({ sessionID: sessionID as never, limit: 40 }).pipe(Effect.orDie)
       const real = messages.filter((message) => message.info.role !== "user" || !message.info.synthetic)
       const userMessages = real.filter((message) => message.info.role === "user")
-      const last = userMessages.at(-1)
-      if (!last) return
-      if (!project.pendingList(sessionID).length && project.ingestCursor(sessionID) === last.info.id) return
+      const lastUser = userMessages.at(-1)
+      const lastMessage = real.at(-1)
+      if (!lastUser || !lastMessage) return { saved: 0, skipped: true, failed: false }
+      const sliceKey = `${lastMessage.info.id}:${lastMessage.parts.length}`
+      const cursor = project.ingestCursor(sessionID)
+      if (!project.pendingList(sessionID).length && cursor === sliceKey)
+        return { saved: 0, skipped: true, failed: false }
+      const cursorIndex = cursor ? real.findIndex((message) => message.info.id === cursor) : -1
+      const fresh = cursorIndex >= 0 ? real.slice(cursorIndex + 1) : real
+      const freshText = fresh
+        .map((message) => {
+          if (message.info.role === "user") return messageText(message)
+          if (reason !== "checkpoint" && settings.ingest !== "eager") return ""
+          return message.parts
+            .map((part) => {
+              if (part.type === "text" && !part.synthetic && !part.ignored) return part.text.trim()
+              if (part.type === "tool" && part.state.status === "completed") return `[tool ${part.tool}] ${part.state.title ?? ""}`
+              return ""
+            })
+            .filter(Boolean)
+            .join("\n")
+            .trim()
+        })
+        .filter(Boolean)
+        .join("\n")
+      const explicit = fresh.some((message) => message.info.role === "user" && MEMORY_INTENT.test(messageText(message)))
+      if (!explicit && freshText.length < settings.ingestMinChars) return { saved: 0, skipped: true, failed: false }
       const transcript = real
         .map((message) => {
           if (message.info.role === "user") {
-            const text = message.parts
-              .map((part) => {
-                if (part.type !== "text" || part.synthetic || part.ignored) return ""
-                return part.text
-              })
-              .join("\n")
-              .trim()
+            const text = messageText(message)
             return text ? `user: ${text}` : ""
           }
           if (reason !== "checkpoint" && settings.ingest !== "eager") return ""
@@ -821,13 +953,53 @@ const layer = Layer.effect(
         .filter(Boolean)
         .join("\n")
         .slice(0, 20_000)
-      if (!transcript) return
-      yield* extractTranscript(sessionID, {
+      if (!transcript) return { saved: 0, skipped: true, failed: false }
+      const result = yield* extractTranscript(sessionID, {
         transcript,
         reason,
-        sliceKey: last.info.id,
+        sliceKey,
         persistPending: true,
       })
+      return { saved: result.saved, skipped: false, failed: result.failed }
+    })
+
+    type IngestReason = "final" | "checkpoint" | "pending"
+    type IngestState = {
+      running: boolean
+      pending?: IngestReason
+      waiters: Array<Deferred.Deferred<IngestResult>>
+    }
+    const ingestStates = new Map<string, IngestState>()
+    const ingestPriority: Record<IngestReason, number> = { pending: 0, checkpoint: 1, final: 2 }
+    const preferIngest = (a: IngestReason, b: IngestReason) => (ingestPriority[b] > ingestPriority[a] ? b : a)
+
+    const ingest = Effect.fn("MemoryV3.ingest")(function* (sessionID: string, reason: IngestReason) {
+      const state = ingestStates.get(sessionID) ?? { running: false, waiters: [] }
+      ingestStates.set(sessionID, state)
+      if (state.running) {
+        state.pending = state.pending ? preferIngest(state.pending, reason) : reason
+        const waiter = yield* Deferred.make<IngestResult>()
+        state.waiters.push(waiter)
+        return yield* Deferred.await(waiter)
+      }
+      state.running = true
+      let result: IngestResult = { saved: 0, skipped: true, failed: false }
+      let next: IngestReason | undefined = reason
+      while (next) {
+        result = yield* ingestNow(sessionID, next).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logError("memory ingest failed", { cause: Cause.pretty(cause) }).pipe(
+              Effect.as({ saved: 0, skipped: false, failed: true } satisfies IngestResult),
+            ),
+          ),
+        )
+        next = state.pending
+        state.pending = undefined
+      }
+      state.running = false
+      const waiters = state.waiters.splice(0)
+      for (const waiter of waiters) yield* Deferred.succeed(waiter, result)
+      return result
     })
 
     const replayPending = Effect.fn("MemoryV3.replayPending")(function* (sessionID: string) {
@@ -864,12 +1036,31 @@ const layer = Layer.effect(
       const list = yield* sessions.list({ roots: true }).pipe(Effect.catch(() => Effect.succeed([])))
       return [...list].sort((a, b) => b.time.updated - a.time.updated)[0]?.id as string | undefined
     })
+    yield* Effect.gen(function* () {
+      const settings = yield* config()
+      if (!settings.enabled || settings.distill === "off") return
+      const sessionID = yield* latestSessionID()
+      if (!sessionID) return
+      const user = yield* store(sessionID, "user")
+      const last = Number(user.meta("distill_last_at") ?? 0)
+      if (Date.now() - last < 7 * 24 * 60 * 60_000) return
+      yield* distillAll()
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logError("memory distill schedule failed", { cause: Cause.pretty(cause) }),
+      ),
+      Effect.repeat(Schedule.spaced(Duration.hours(6))),
+      Effect.delay(Duration.minutes(5)),
+      Effect.forkScoped,
+    )
+
     return Service.of({
       enabled: () =>
         config().pipe(
           Effect.map((settings) => settings.enabled),
           Effect.catch(() => Effect.succeed(false)),
         ),
+      configure,
       root: memoryRoot,
       latestSessionID,
       context,
@@ -882,7 +1073,6 @@ const layer = Layer.effect(
       mutate,
       timeline,
       facts,
-      review,
       navigate,
       stats,
       profile,
@@ -891,6 +1081,8 @@ const layer = Layer.effect(
       audit,
       suggestions,
       reflect,
+      distill,
+      distillAll,
       decideReflection,
       replayPending,
       exportMemory,
@@ -908,6 +1100,15 @@ export const node = LayerNode.make({
   layer,
   deps: [Config.node, Session.node, Agent.node, Provider.node, LLM.node],
 })
+const MEMORY_INTENT = /记住|记一下|记下来|以后都|以后不|remember|don't forget|do not forget/i
+
+function messageText(message: SessionV1.WithParts) {
+  return message.parts
+    .flatMap((part) => (part.type === "text" && !part.synthetic && !part.ignored ? [part.text] : []))
+    .join("\n")
+    .trim()
+}
+
 function parseExtraction(raw: string): { items: Array<{ content: string; kind: MemoryKind; scope: MemoryScope; importance: number }>; summary?: string } | undefined {
   const cleaned = raw.replace(/```(?:json)?/gi, "").trim()
   const start = cleaned.indexOf("{")

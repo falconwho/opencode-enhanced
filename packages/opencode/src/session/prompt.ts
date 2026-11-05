@@ -1470,8 +1470,8 @@ const layer = Layer.effect(
 
         yield* compaction.prune({ sessionID }).pipe(Effect.ignore, Effect.forkIn(scope))
         yield* Effect.gen(function* () {
-          yield* memoryV3.ingest(sessionID, "final")
-          yield* memoryV3.reflect(sessionID)
+          const result = yield* memoryV3.ingest(sessionID, "final")
+          if (result.saved > 0) yield* memoryV3.reflect(sessionID)
         }).pipe(Effect.ignore, Effect.forkIn(scope))
         return yield* lastAssistant(sessionID)
       },

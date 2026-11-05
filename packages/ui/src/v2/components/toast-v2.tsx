@@ -47,8 +47,8 @@ function ToastV2Region(props: ToastV2RegionProps) {
   return (
     <Portal>
       <Toaster
-        position={isRTL(i18n.locale()) ? "bottom-left" : "bottom-right"}
-        offset={isRTL(i18n.locale()) ? { left: 32, bottom: 48 } : { right: 32, bottom: 48 }}
+        position={isRTL(i18n.locale()) ? "top-left" : "top-right"}
+        offset={isRTL(i18n.locale()) ? { left: 32, top: 48 } : { right: 32, top: 48 }}
         mobileOffset={16}
         gap={12}
         duration={5000}

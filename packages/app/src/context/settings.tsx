@@ -26,7 +26,7 @@ export interface Settings {
     followup: "queue" | "steer"
     sendKeybind: "ctrl-enter" | "enter"
     approvalModel: string
-    approvalEffort: "low" | "medium" | "high"
+    approvalEffort: string
     showFileTree: boolean
     showNavigation: boolean
     showSearch: boolean
@@ -384,7 +384,7 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
           setStore("general", "approvalModel", value.trim() ? value.trim() : defaultSettings.general.approvalModel)
         },
         approvalEffort: withFallback(() => store.general?.approvalEffort, defaultSettings.general.approvalEffort),
-        setApprovalEffort(value: "low" | "medium" | "high") {
+        setApprovalEffort(value: string) {
           setStore("general", "approvalEffort", value)
         },
         showFileTree,

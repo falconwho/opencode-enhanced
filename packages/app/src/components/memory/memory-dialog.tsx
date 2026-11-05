@@ -2,7 +2,6 @@ import { Component, For, Show, createResource, createSignal } from "solid-js"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
-import { TextField } from "@opencode-ai/ui/text-field"
 import { useServerSDK } from "@/context/server-sdk"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { authTokenFromCredentials } from "@/utils/server"
@@ -12,7 +11,6 @@ type Stats = {
   total?: number
   active?: number
   archived?: number
-  due?: number
   byKind?: Record<string, number>
   rooms?: Array<{ room: string; count: number }>
 }
@@ -31,12 +29,6 @@ type Node = {
 type Profile = {
   current?: { content: string; version: number }
   versions?: Array<{ version: number; content: string; source: string; at: number }>
-}
-
-type Hit = {
-  node: Node
-  score: number
-  ref: string
 }
 
 type Room = {
@@ -67,13 +59,12 @@ type AuditEntry = {
   detail?: unknown
 }
 
-const tabs = ["概览", "记忆库", "画像", "复习", "巩固", "审计", "运维"] as const
+const tabs = ["概览", "记忆库", "画像", "整理", "记录", "运维"] as const
 
 export const MemoryDialog: Component<{ sessionID?: string; directory?: string }> = (props) => {
   const dialog = useDialog()
   const serverSdk = useServerSDK()
   const [tab, setTab] = createSignal<(typeof tabs)[number]>("概览")
-  const [query, setQuery] = createSignal("")
   const [profileText, setProfileText] = createSignal("")
   const [loadError, setLoadError] = createSignal<string>()
   let importRef: HTMLInputElement | undefined
@@ -125,35 +116,19 @@ export const MemoryDialog: Component<{ sessionID?: string; directory?: string }>
   const [rooms, { refetch: refreshRooms }] = createResource<Room[]>(() => load("/memory/v3/rooms", []))
   const [nodes, { refetch: refreshNodes }] = createResource<Node[]>(() => load("/memory/v3/nodes?limit=200", []))
   const [profile, { refetch: refreshProfile }] = createResource<Profile>(() => load("/memory/v3/profile", {}))
-  const [review, { refetch: refreshReview }] = createResource<Node[]>(() => load("/memory/v3/review", []))
   const [reflections, { refetch: refreshReflections }] = createResource<Reflection[]>(() =>
     load("/memory/v3/reflect", []),
   )
   const [audit, { refetch: refreshAudit }] = createResource<AuditEntry[]>(() => load("/memory/v3/audit?limit=100", []))
-  const [search, setSearch] = createSignal<Hit[]>([])
-  const [searching, setSearching] = createSignal(false)
+  const [editing, setEditing] = createSignal<{ id: string; text: string }>()
 
   const refresh = () => {
     void refreshStats()
     void refreshRooms()
     void refreshNodes()
     void refreshProfile()
-    void refreshReview()
     void refreshReflections()
     void refreshAudit()
-  }
-
-  const runSearch = async () => {
-    if (!query().trim()) return
-    setSearching(true)
-    try {
-      const result = (await request(`/memory/v3/search?query=${encodeURIComponent(query())}`)) as { hits?: Hit[] }
-      setSearch(result.hits ?? [])
-    } catch (error) {
-      showToast({ title: "记忆搜索失败", description: error instanceof Error ? error.message : String(error) })
-    } finally {
-      setSearching(false)
-    }
   }
 
   const mutate = async (node: Node, action: "update" | "archive" | "restore" | "forget", content?: string) => {
@@ -163,27 +138,28 @@ export const MemoryDialog: Component<{ sessionID?: string; directory?: string }>
         body: JSON.stringify({ id: node.id, action, content }),
       })
       refresh()
+      showToast({
+        title: { update: "记忆已更新", archive: "已归档", restore: "已恢复", forget: "已遗忘" }[action],
+      })
+      return true
     } catch (error) {
       showToast({ title: "记忆操作失败", description: error instanceof Error ? error.message : String(error) })
+      return false
     }
   }
 
-  const edit = (node: Node) => {
-    const content = window.prompt("编辑记忆内容", node.content)
-    if (content === null || !content.trim() || content === node.content) return
-    void mutate(node, "update", content.trim())
-  }
+  const startEdit = (node: Node) => setEditing({ id: node.id, text: node.content })
 
-  const grade = async (node: Node, value: number) => {
-    try {
-      await request("/memory/v3/review", {
-        method: "POST",
-        body: JSON.stringify({ id: node.id, grade: value }),
-      })
-      void refreshReview()
-    } catch (error) {
-      showToast({ title: "复习评分失败", description: error instanceof Error ? error.message : String(error) })
+  const cancelEdit = () => setEditing(undefined)
+
+  const saveEdit = async (node: Node) => {
+    const content = editing()?.text.trim() ?? ""
+    if (!content) {
+      showToast({ title: "记忆内容不能为空" })
+      return
     }
+    if (content !== node.content && !(await mutate(node, "update", content))) return
+    cancelEdit()
   }
 
   const saveProfile = async () => {
@@ -206,9 +182,24 @@ export const MemoryDialog: Component<{ sessionID?: string; directory?: string }>
         applied?: number
       }
       refresh()
-      showToast({ title: `巩固完成：新增 ${result.created ?? 0} 条建议` })
+      showToast({ title: `整理完成：新增 ${result.created ?? 0} 条建议` })
     } catch (error) {
-      showToast({ title: "巩固失败", description: error instanceof Error ? error.message : String(error) })
+      showToast({ title: "整理失败", description: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
+  const runDistill = async () => {
+    try {
+      const result = (await request("/memory/v3/distill", {
+        method: "POST",
+        body: JSON.stringify({ scope: "all" }),
+      })) as { distilled?: number; superseded?: number; failed?: number }
+      refresh()
+      showToast({
+        title: `蒸馏完成：新增 ${result.distilled ?? 0} 条，归档 ${result.superseded ?? 0} 条`,
+      })
+    } catch (error) {
+      showToast({ title: "蒸馏失败", description: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -220,7 +211,7 @@ export const MemoryDialog: Component<{ sessionID?: string; directory?: string }>
       })
       refresh()
     } catch (error) {
-      showToast({ title: "巩固操作失败", description: error instanceof Error ? error.message : String(error) })
+      showToast({ title: "整理操作失败", description: error instanceof Error ? error.message : String(error) })
     }
   }
 
@@ -348,7 +339,7 @@ export const MemoryDialog: Component<{ sessionID?: string; directory?: string }>
             <div class="grid grid-cols-4 gap-2">
               <Metric label="总数" value={stats()?.total ?? 0} />
               <Metric label="active" value={stats()?.active ?? 0} />
-              <Metric label="待复习" value={stats()?.due ?? 0} />
+              <Metric label="归档/遗忘" value={stats()?.archived ?? 0} />
               <Metric label="房间" value={stats()?.rooms?.length ?? 0} />
             </div>
             <div class="mt-4 grid grid-cols-2 gap-2">
@@ -364,13 +355,7 @@ export const MemoryDialog: Component<{ sessionID?: string; directory?: string }>
           </Show>
 
           <Show when={tab() === "记忆库"}>
-            <div class="mb-3 flex gap-2">
-              <TextField value={query()} onInput={(event) => setQuery(event.currentTarget.value)} placeholder="搜索记忆" />
-              <Button size="small" onClick={() => void runSearch()} disabled={searching()}>
-                搜索
-              </Button>
-            </div>
-            <For each={search().length ? search().map((hit) => hit.node) : (nodes() ?? [])}>
+            <For each={nodes() ?? []}>
               {(node) => (
                 <div class="mb-2 rounded border border-border-base p-3">
                   <div class="flex items-center justify-between gap-2">
@@ -379,21 +364,44 @@ export const MemoryDialog: Component<{ sessionID?: string; directory?: string }>
                       {node.slot ? ` · ${node.slot.room}#${node.slot.index}` : ""}
                     </div>
                     <div class="flex gap-1">
-                      <Button size="small" variant="ghost" onClick={() => edit(node)}>
-                        编辑
-                      </Button>
-                      <Button size="small" variant="ghost" onClick={() => void mutate(node, "archive")}>
-                        归档
-                      </Button>
-                      <Button size="small" variant="ghost" onClick={() => void mutate(node, "restore")}>
-                        恢复
-                      </Button>
-                      <Button size="small" variant="ghost" onClick={() => void mutate(node, "forget")}>
-                        遗忘
-                      </Button>
+                      <Show
+                        when={editing()?.id === node.id}
+                        fallback={
+                          <>
+                            <Button size="small" variant="ghost" onClick={() => startEdit(node)}>
+                              编辑
+                            </Button>
+                            <Button size="small" variant="ghost" onClick={() => void mutate(node, "archive")}>
+                              归档
+                            </Button>
+                            <Button size="small" variant="ghost" onClick={() => void mutate(node, "restore")}>
+                              恢复
+                            </Button>
+                            <Button size="small" variant="ghost" onClick={() => void mutate(node, "forget")}>
+                              遗忘
+                            </Button>
+                          </>
+                        }
+                      >
+                        <Button size="small" onClick={() => void saveEdit(node)}>
+                          保存
+                        </Button>
+                        <Button size="small" variant="ghost" onClick={cancelEdit}>
+                          取消
+                        </Button>
+                      </Show>
                     </div>
                   </div>
-                  <div class="mt-1 whitespace-pre-wrap text-13-regular text-text-base">{node.content}</div>
+                  <Show
+                    when={editing()?.id === node.id}
+                    fallback={<div class="mt-1 whitespace-pre-wrap text-13-regular text-text-base">{node.content}</div>}
+                  >
+                    <textarea
+                      class="mt-1 min-h-24 w-full rounded border border-border-base bg-background-base p-2 text-13-regular text-text-base"
+                      value={editing()?.text ?? ""}
+                      onInput={(event) => setEditing({ id: node.id, text: event.currentTarget.value })}
+                    />
+                  </Show>
                   <div class="mt-1 text-11-regular text-text-weak">{node.id}</div>
                 </div>
               )}
@@ -417,32 +425,13 @@ export const MemoryDialog: Component<{ sessionID?: string; directory?: string }>
             </div>
           </Show>
 
-          <Show when={tab() === "复习"}>
-            <For each={review() ?? []}>
-              {(node) => (
-                <div class="mb-2 rounded border border-border-base p-3">
-                  <div class="text-12-regular text-text-weak">
-                    {node.slot ? `${node.slot.room}#${node.slot.index}` : "未排桩"} · {node.kind}
-                  </div>
-                  <div class="mt-1 text-13-regular text-text-base">{node.content}</div>
-                  <div class="mt-2 flex gap-1">
-                    <For each={[0, 3, 4, 5]}>
-                      {(value) => (
-                        <Button size="small" variant="ghost" onClick={() => void grade(node, value)}>
-                          {value}
-                        </Button>
-                      )}
-                    </For>
-                  </div>
-                </div>
-              )}
-            </For>
-          </Show>
-
-          <Show when={tab() === "巩固"}>
+          <Show when={tab() === "整理"}>
             <div class="mb-3 flex gap-2">
               <Button size="small" onClick={() => void runReflect()}>
-                立即巩固
+                立即整理
+              </Button>
+              <Button size="small" variant="ghost" onClick={() => void runDistill()}>
+                立即蒸馏
               </Button>
               <Button size="small" variant="ghost" onClick={() => void refreshReflections()}>
                 刷新
@@ -474,7 +463,7 @@ export const MemoryDialog: Component<{ sessionID?: string; directory?: string }>
             </For>
           </Show>
 
-          <Show when={tab() === "审计"}>
+          <Show when={tab() === "记录"}>
             <div class="mb-3 flex gap-2">
               <Button size="small" variant="ghost" onClick={() => void refreshAudit()}>
                 刷新

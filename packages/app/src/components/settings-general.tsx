@@ -1,4 +1,4 @@
-import { Component, Show, createMemo, createResource, onMount, type JSX } from "solid-js"
+import { Component, Show, createEffect, createMemo, createResource, onMount, type JSX } from "solid-js"
 import { Button } from "@opencode-ai/ui/button"
 import { Icon } from "@opencode-ai/ui/icon"
 import { Select } from "@opencode-ai/ui/select"
@@ -251,6 +251,24 @@ export const SettingsGeneral: Component = () => {
     return list
   })
 
+  const approvalEffortOptions = createMemo(() => {
+    const current = settings.general.approvalModel()
+    const slash = current.indexOf("/")
+    if (slash < 0) return [] as Array<{ value: string; label: string }>
+    const model = models.find({
+      providerID: current.slice(0, slash),
+      modelID: current.slice(slash + 1),
+    })
+    return Object.keys(model?.variants ?? {}).map((value) => ({ value, label: value }))
+  })
+
+  createEffect(() => {
+    const options = approvalEffortOptions()
+    if (!options.length) return
+    if (options.some((option) => option.value === settings.general.approvalEffort())) return
+    settings.general.setApprovalEffort(options.find((option) => option.value === "high")?.value ?? options[0]!.value)
+  })
+
   const [shells] = createResource(
     async () => {
       const sdk = serverSdk()
@@ -486,22 +504,15 @@ export const SettingsGeneral: Component = () => {
         >
           <div data-action="settings-approval-effort">
             <Select
-              options={[
-                { value: "low" as const, label: "low" },
-                { value: "medium" as const, label: "medium" },
-                { value: "high" as const, label: "high" },
-              ]}
-              current={[
-                { value: "low" as const, label: "low" },
-                { value: "medium" as const, label: "medium" },
-                { value: "high" as const, label: "high" },
-              ].find((o) => o.value === settings.general.approvalEffort())}
+              options={approvalEffortOptions()}
+              current={approvalEffortOptions().find((o) => o.value === settings.general.approvalEffort())}
               value={(o) => o.value}
               label={(o) => o.label}
               onSelect={(option) => option && settings.general.setApprovalEffort(option.value)}
               variant="secondary"
               size="small"
               triggerVariant="settings"
+              disabled={approvalEffortOptions().length === 0}
             />
           </div>
         </SettingsRow>

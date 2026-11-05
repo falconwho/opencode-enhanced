@@ -632,7 +632,7 @@
 
 [data-component="context-tool-group-trigger"] {
   width: 100%;
-  min-height: 24px;
+  min-height: 20px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -1219,7 +1219,7 @@
     position: sticky;
     top: var(--sticky-accordion-top, 0px);
     z-index: 20;
-    height: calc(32px + var(--tool-content-gap));
+    height: calc(var(--tool-trigger-height, 32px) + var(--tool-content-gap));
     padding-bottom: var(--tool-content-gap);
     background-color: var(--v2-background-bg-base);
   }

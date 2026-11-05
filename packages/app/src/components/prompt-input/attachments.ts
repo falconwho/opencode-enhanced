@@ -13,6 +13,12 @@ import { normalizePaste, pasteMode } from "./paste"
 type PromptTarget = Pick<ReturnType<ReturnType<typeof usePrompt>["capture"]>, "current" | "cursor" | "set">
 type AttachmentTarget = { prompt: PromptTarget; cursor: number | undefined }
 
+export function reuseImageAttachments(previous: ImageAttachmentPart[], current: ImageAttachmentPart[]) {
+  if (!previous.length) return current
+  const byID = new Map(previous.map((part) => [part.id, part]))
+  return current.map((part) => byID.get(part.id) ?? part)
+}
+
 type PromptAttachmentsCoreInput = {
   capture: () => PromptTarget
   editor: () => HTMLDivElement | undefined

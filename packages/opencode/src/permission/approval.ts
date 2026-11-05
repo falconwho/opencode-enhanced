@@ -9,6 +9,7 @@ import fs from "fs/promises"
 import path from "path"
 import { Agent } from "@/agent/agent"
 import { Provider } from "@/provider/provider"
+import { normalizeReasoningEffort } from "@/provider/reasoning"
 import { LLM } from "@/session/llm"
 import { MessageID } from "@/session/schema"
 
@@ -44,7 +45,7 @@ export interface JudgeInput {
   readonly metadata?: Record<string, unknown>
   readonly tool?: { messageID: string; callID: string } | string
   readonly model?: string
-  readonly effort?: "low" | "medium" | "high"
+  readonly effort?: string
 }
 
 export interface JudgeResult {
@@ -89,7 +90,8 @@ const layer = Layer.effect(
         refs.map((ref) => provider.getModel(ref.providerID, ref.modelID)),
       ).pipe(Effect.mapError(() => unavailable("no approval model available")))
 
-      const agent = input.effort ? { ...base, options: { ...base.options, reasoningEffort: input.effort } } : base
+      const effort = normalizeReasoningEffort(model, input.effort)
+      const agent = effort ? { ...base, options: { ...base.options, reasoningEffort: effort } } : base
       const user: SessionV1.User = {
         id: MessageID.ascending(),
         sessionID: input.sessionID as SessionV1.User["sessionID"],

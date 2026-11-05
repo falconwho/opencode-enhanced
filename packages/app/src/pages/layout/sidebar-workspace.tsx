@@ -282,7 +282,13 @@ const FolderSection = (props: {
   const droppable = createDroppable(`folder:${props.folder.id}`)
   const dialog = useDialog()
   const [draft, setDraft] = createSignal(props.folder.name)
-  const commit = () => props.onRename(draft())
+  let saved = false
+  const commit = (value?: string) => {
+    if (saved) return
+    saved = true
+    const next = (value ?? draft()).trim()
+    props.onRename(next || props.folder.name)
+  }
   return (
     <div
       ref={droppable.ref}
@@ -297,12 +303,25 @@ const FolderSection = (props: {
             <TextField
               autofocus
               value={draft()}
-              onChange={(value: string) => setDraft(value)}
+              onInput={(event) => setDraft(event.currentTarget.value)}
               onKeyDown={(event: KeyboardEvent) => {
-                if (event.key === "Enter") commit()
-                if (event.key === "Escape") props.onRename(props.folder.name)
+                if (event.isComposing) return
+                if (event.key === "Enter") {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  commit(event.target instanceof HTMLInputElement ? event.target.value : draft())
+                  return
+                }
+                if (event.key === "Escape") {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  saved = true
+                  props.onRename(props.folder.name)
+                }
               }}
-              onBlur={commit}
+              onBlur={(event: FocusEvent) =>
+                commit(event.target instanceof HTMLInputElement ? event.target.value : draft())
+              }
             />
           </div>
         }
@@ -337,6 +356,7 @@ const FolderSection = (props: {
               onClick={(event) => {
                 event.stopPropagation()
                 setDraft(props.folder.name)
+                saved = false
                 props.onStartRename()
               }}
             />
@@ -408,6 +428,7 @@ const WorkspaceSessionList = (props: {
   const folders = createSessionFolders(() => decode64(props.slug()) ?? "")
   const [creating, setCreating] = createSignal(false)
   const [renaming, setRenaming] = createSignal<string>()
+  let creatingCommitted = false
   const grouped = createMemo(() => folders.grouped(props.sessions()))
 
   const handleDragEnd = (event: DragEvent) => {
@@ -463,13 +484,20 @@ const WorkspaceSessionList = (props: {
                 autofocus
                 placeholder={props.language.t("sidebar.folders.newPlaceholder")}
                 onKeyDown={(event: KeyboardEvent) => {
-                  if (event.key !== "Enter") return
-                  const value = (event.currentTarget as HTMLInputElement).value
+                  if (event.key !== "Enter" || event.isComposing) return
+                  event.preventDefault()
+                  event.stopPropagation()
+                  creatingCommitted = true
+                  const value = event.target instanceof HTMLInputElement ? event.target.value : ""
                   if (value.trim()) folders.create(value)
                   setCreating(false)
                 }}
                 onBlur={(event: FocusEvent) => {
-                  const value = (event.currentTarget as HTMLInputElement).value
+                  if (creatingCommitted) {
+                    creatingCommitted = false
+                    return
+                  }
+                  const value = event.target instanceof HTMLInputElement ? event.target.value : ""
                   if (value.trim()) folders.create(value)
                   setCreating(false)
                 }}
@@ -480,7 +508,10 @@ const WorkspaceSessionList = (props: {
           <button
             type="button"
             class="flex w-full items-center gap-1 rounded-md px-2 py-0.5 text-left text-12-regular text-text-weak hover:bg-surface-raised-base-hover hover:text-text-base"
-            onClick={() => setCreating(true)}
+            onClick={() => {
+              creatingCommitted = false
+              setCreating(true)
+            }}
           >
             <Icon name="plus" size="small" class="text-icon-weak" />
             {props.language.t("sidebar.folders.new")}

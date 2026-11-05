@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { createTextFragment, getCursorPosition, getNodeLength, getTextLength, setCursorPosition } from "./editor-dom"
+import { createTextFragment, getCursorPosition, getMentionRange, getNodeLength, getTextLength, setCursorPosition } from "./editor-dom"
 
 describe("prompt-input editor dom", () => {
   test("createTextFragment preserves newlines with consecutive br nodes", () => {
@@ -93,6 +93,49 @@ describe("prompt-input editor dom", () => {
 
     setCursorPosition(container, 3)
     expect(getCursorPosition(container)).toBe(3)
+
+    container.remove()
+  })
+
+  test("finds the active mention query after a pill", () => {
+    const container = document.createElement("div")
+    const pill = document.createElement("span")
+    pill.dataset.type = "file"
+    pill.textContent = "@file"
+    container.appendChild(document.createTextNode("hello "))
+    container.appendChild(pill)
+    container.appendChild(document.createTextNode(" @src/fo"))
+    document.body.appendChild(container)
+
+    setCursorPosition(container, 19)
+    const mention = getMentionRange(container)
+    expect(mention?.query).toBe("src/fo")
+    expect(mention?.range.toString()).toBe("@src/fo")
+
+    container.remove()
+  })
+
+  test("finds the active mention query after a line break", () => {
+    const container = document.createElement("div")
+    container.appendChild(document.createTextNode("first"))
+    container.appendChild(document.createElement("br"))
+    container.appendChild(document.createTextNode("@src/bar"))
+    document.body.appendChild(container)
+
+    setCursorPosition(container, 14)
+    const mention = getMentionRange(container)
+    expect(mention?.query).toBe("src/bar")
+
+    container.remove()
+  })
+
+  test("ignores a completed mention followed by whitespace", () => {
+    const container = document.createElement("div")
+    container.appendChild(document.createTextNode("hello @done "))
+    document.body.appendChild(container)
+
+    setCursorPosition(container, 12)
+    expect(getMentionRange(container)).toBeUndefined()
 
     container.remove()
   })

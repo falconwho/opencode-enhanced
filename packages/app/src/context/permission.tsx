@@ -224,7 +224,7 @@ type PermissionEvent = Parameters<Parameters<ServerSDK["event"]["listen"]>[0]>[0
 function createServerPermissionState(input: {
   sdk: ServerSDK
   sync: ServerSync
-  approval: { model: () => string; effort: () => "low" | "medium" | "high" }
+  approval: { model: () => string; effort: () => string }
   fetch?: typeof globalThis.fetch
 }) {
   const [store, setStore, _, ready] = persisted(
@@ -275,7 +275,7 @@ function createServerPermissionState(input: {
   // reasoning effort in sync with the AI approval settings. Memory extraction
   // runs on the server at session idle, so unlike the approval judge it cannot
   // receive per-request values; the app pushes the current settings instead.
-  const syncMemoryConfig = (model: string, effort: "low" | "medium" | "high") => {
+  const syncMemoryConfig = (model: string, effort: string) => {
     const http = input.sdk.server.http
     void (input.fetch ?? globalThis.fetch)(new URL("/memory/config", http.url).toString(), {
       method: "POST",

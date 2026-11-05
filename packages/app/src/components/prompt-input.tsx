@@ -55,8 +55,8 @@ import { useLanguage } from "@/context/language"
 import { useSettings } from "@/context/settings"
 import { usePlatform } from "@/context/platform"
 import { createSessionTabs } from "@/pages/session/helpers"
-import { createTextFragment, getCursorPosition, setCursorPosition, setRangeEdge } from "./prompt-input/editor-dom"
-import { createPromptAttachments } from "./prompt-input/attachments"
+import { createTextFragment, getCursorPosition, getMentionRange, setCursorPosition } from "./prompt-input/editor-dom"
+import { createPromptAttachments, reuseImageAttachments } from "./prompt-input/attachments"
 import { ACCEPTED_FILE_TYPES, pickAttachmentFiles } from "./prompt-input/files"
 import {
   canNavigateHistoryAtCursor,
@@ -259,9 +259,10 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
   })
   const info = createMemo(() => (props.controls.session.id ? sync().session.get(props.controls.session.id) : undefined))
   const working = createMemo(() => sync().data.session_working(props.controls.session.id ?? ""))
-  const imageAttachments = createMemo(() =>
-    prompt.current().filter((part): part is ImageAttachmentPart => part.type === "image"),
-  )
+  const imageAttachments = createMemo((previous: ImageAttachmentPart[] = []) => {
+    const current = prompt.current().filter((part): part is ImageAttachmentPart => part.type === "image")
+    return reuseImageAttachments(previous, current)
+  }, [])
 
   const [store, setStore] = createPromptInputTransientState(
     () => prompt.capture(),
@@ -1075,11 +1076,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     const shellMode = store.mode === "shell"
 
     if (!shellMode) {
-      const atMatch = rawText.substring(0, cursorPosition).match(/@(\S*)$/)
+      const mention = getMentionRange(editorRef)
       const slashMatch = rawText.match(/^\/(\S*)$/)
 
-      if (atMatch) {
-        atOnInput(atMatch[1])
+      if (mention) {
+        atOnInput(mention.query)
         setStore({ popover: "at", slashMenu: false, slashMenuQuery: "" })
       } else if (slashMatch) {
         slashOnInput(slashMatch[1])
@@ -1115,20 +1116,13 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
     if (!editorRef.contains(range.startContainer)) return false
 
     if (part.type === "file" || part.type === "agent" || part.type === "session") {
-      const cursorPosition = getCursorPosition(editorRef)
-      const rawText = prompt
-        .current()
-        .map((p) => ("content" in p ? p.content : ""))
-        .join("")
-      const textBeforeCursor = rawText.substring(0, cursorPosition)
-      const atMatch = textBeforeCursor.match(/@(\S*)$/)
+      const mention = getMentionRange(editorRef)
       const pill = createPill(part)
       const gap = document.createTextNode(" ")
 
-      if (atMatch) {
-        const start = atMatch.index ?? cursorPosition - atMatch[0].length
-        setRangeEdge(editorRef, range, "start", start)
-        setRangeEdge(editorRef, range, "end", cursorPosition)
+      if (mention) {
+        range.setStart(mention.range.startContainer, mention.range.startOffset)
+        range.setEnd(mention.range.endContainer, mention.range.endOffset)
       }
 
       range.deleteContents()

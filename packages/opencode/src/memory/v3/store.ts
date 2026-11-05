@@ -3,7 +3,6 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { assignSlot, scorePlacard } from "./palace"
 import { migrate } from "./schema"
-import { initialSchedule, nextSchedule } from "./sm2"
 import { openSqlite, type SqlDatabase } from "./sqlite"
 import { sanitizeMemory } from "./security"
 import { ftsQuery, searchText } from "./text"
@@ -21,7 +20,6 @@ import type {
   ReflectionAction,
   ReflectionStatus,
   ReflectionSuggestion,
-  ReviewSchedule,
   SaveResult,
   Slot,
 } from "./types"
@@ -41,13 +39,11 @@ export type SaveInput = {
   placard?: string
   entities?: Array<{ name: string; kind?: string; aliases?: string[] }>
   autoSlot?: boolean
-  reviewScheduling?: boolean
   now?: number
 }
 
 export type StoreOptions = {
   autoSlot?: boolean
-  reviewScheduling?: boolean
   mergeThreshold?: number
   deferThreshold?: number
 }
@@ -65,7 +61,6 @@ export class MemoryStore {
     migrate(db)
     return new MemoryStore(db, scope, {
       autoSlot: options.autoSlot ?? true,
-      reviewScheduling: options.reviewScheduling ?? true,
       mergeThreshold: options.mergeThreshold ?? 0.92,
       deferThreshold: options.deferThreshold ?? 0.84,
     })
@@ -94,7 +89,6 @@ export class MemoryStore {
       const occupancy = this.occupancy()
       const slot = (input.autoSlot ?? this.options.autoSlot!) ? assignSlot(input.kind, occupancy).slot : undefined
       const imagery = this.imagery(content, input.placard, now, slot)
-      const schedule = (input.reviewScheduling ?? this.options.reviewScheduling!) ? initialSchedule(now) : undefined
       const status: MemoryStatus = deferred ? "needs_review" : "active"
       const confidence = input.confidence ?? (deferred ? 0.5 : 0.7)
       this.insertNode({
@@ -115,7 +109,6 @@ export class MemoryStore {
         embedding: input.embedding,
         imagery,
         slot,
-        schedule,
       })
       if (slot) this.appendRoute(id)
       if (input.entities?.length) this.linkEntities(id, input.entities, now)
@@ -164,6 +157,12 @@ export class MemoryStore {
 
   activeNodes() {
     return (this.db.prepare("SELECT * FROM nodes WHERE status = 'active'").all() as Row[]).map((row) => this.rowNode(row))
+  }
+
+  topActive(limit = 30) {
+    return (this.db
+      .prepare("SELECT * FROM nodes WHERE status = 'active' ORDER BY importance DESC, created_at DESC LIMIT ?")
+      .all(limit) as Row[]).map((row) => this.rowNode(row))
   }
 
   allNodes() {
@@ -231,6 +230,44 @@ export class MemoryStore {
       .run(from, to, type, now)
   }
 
+  supersedeMany(
+    input: { kind: MemoryKind; content: string; importance: number; confidence: number; embedding?: Float32Array },
+    oldIds: string[],
+  ) {
+    const content = sanitizeMemory(input.content).trim()
+    if (!content) return
+    const active = oldIds.filter((id) => this.getNode(id)?.status === "active")
+    if (!active.length) return
+    return this.transaction(() => {
+      const now = Date.now()
+      const id = `mem_${randomUUID()}`
+      const occupancy = this.occupancy()
+      const slot = this.options.autoSlot ? assignSlot(input.kind, occupancy).slot : undefined
+      this.insertNode({
+        id,
+        scope: this.scope,
+        kind: input.kind,
+        content,
+        contentHash: digest(content),
+        importance: input.importance,
+        confidence: input.confidence,
+        status: "active",
+        createdAt: now,
+        lastAccessedAt: now,
+        accessCount: 0,
+        embedding: input.embedding,
+        slot,
+      })
+      if (slot) this.appendRoute(id)
+      for (const oldId of active) {
+        this.edge(id, oldId, "supersedes", now)
+        this.setStatus(oldId, "archived")
+      }
+      this.log("distill", id, { supersedes: active.length })
+      return this.getNode(id)
+    })
+  }
+
   neighbors(id: string, hops = 1) {
     const rows = this.db
       .prepare(
@@ -279,7 +316,7 @@ export class MemoryStore {
       .all() as Array<{ position: number; node_id: string }>
   }
 
-  stats(now = Date.now()): MemoryStats {
+  stats(): MemoryStats {
     const byKind = Object.fromEntries(
       (this.db.prepare("SELECT kind, COUNT(*) AS n FROM nodes GROUP BY kind").all() as Array<{ kind: string; n: number }>).map(
         (row) => [row.kind, row.n],
@@ -292,32 +329,13 @@ export class MemoryStore {
     const archived = Number(
       (this.db.prepare("SELECT COUNT(*) AS n FROM nodes WHERE status IN ('archived','forgotten')").get() as { n: number }).n,
     )
-    const due = Number(
-      (this.db.prepare("SELECT COUNT(*) AS n FROM nodes WHERE next_review_at IS NOT NULL AND next_review_at <= ?").get(now) as { n: number }).n,
-    )
     const rooms = (this.db.prepare("SELECT slot_room AS room, COUNT(*) AS count FROM nodes WHERE status = 'active' AND slot_room IS NOT NULL GROUP BY slot_room ORDER BY slot_room").all() as Array<{
       room: string
       count: number
     }>)
-    return { total, active, archived, due, byKind, rooms }
+    return { total, active, archived, byKind, rooms }
   }
 
-  reviewQueue(now = Date.now(), limit = 20) {
-    return (this.db
-      .prepare("SELECT * FROM nodes WHERE status = 'active' AND next_review_at IS NOT NULL AND next_review_at <= ? ORDER BY next_review_at LIMIT ?")
-      .all(now, limit) as Row[]).map((row) => this.rowNode(row))
-  }
-
-  gradeReview(id: string, grade: number, now = Date.now()) {
-    const node = this.getNode(id)
-    if (!node) return
-    const next = nextSchedule(grade, node.review, now)
-    this.db
-      .prepare("UPDATE nodes SET next_review_at = ?, ease_factor = ?, interval_days = ?, review_reps = ?, last_accessed_at = ? WHERE id = ?")
-      .run(next.nextReviewAt, next.easeFactor, next.intervalDays, next.reps, now, id)
-    this.log("review", id, { grade, interval: next.intervalDays })
-    return next
-  }
 
   list(input: { status?: MemoryStatus; kind?: MemoryKind; room?: string; query?: string; limit?: number; offset?: number } = {}) {
     const conditions = ["1 = 1"]
@@ -808,12 +826,11 @@ export class MemoryStore {
     embedding?: Float32Array
     imagery?: Imagery
     slot?: Slot
-    schedule?: ReviewSchedule
   }) {
     this.db
       .prepare(
-        `INSERT INTO nodes (id, scope, kind, content, content_hash, importance, confidence, status, created_at, last_accessed_at, access_count, source_session_id, source_round, source_seq, embedding, imagery_json, slot_room, slot_index, imagery_score, next_review_at, ease_factor, interval_days, review_reps)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO nodes (id, scope, kind, content, content_hash, importance, confidence, status, created_at, last_accessed_at, access_count, source_session_id, source_round, source_seq, embedding, imagery_json, slot_room, slot_index, imagery_score)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         input.id,
@@ -835,10 +852,6 @@ export class MemoryStore {
         input.slot?.room ?? null,
         input.slot?.index ?? null,
         input.imagery?.score ?? null,
-        input.schedule?.nextReviewAt ?? null,
-        input.schedule?.easeFactor ?? null,
-        input.schedule?.intervalDays ?? null,
-        input.schedule?.reps ?? 0,
       )
     this.db.prepare("INSERT INTO nodes_fts (node_id, search_text) VALUES (?, ?)").run(input.id, searchText(input.content))
   }
@@ -921,12 +934,6 @@ export class MemoryStore {
         row.slot_room === null
           ? undefined
           : { room: row.slot_room as string, index: Number(row.slot_index) },
-      review: {
-        nextReviewAt: row.next_review_at === null ? null : Number(row.next_review_at),
-        easeFactor: row.ease_factor === null ? 2.5 : Number(row.ease_factor),
-        intervalDays: row.interval_days === null ? 0 : Number(row.interval_days),
-        reps: Number(row.review_reps ?? 0),
-      },
     }
   }
 

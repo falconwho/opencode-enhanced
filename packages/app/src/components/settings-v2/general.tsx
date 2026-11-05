@@ -392,7 +392,7 @@ export const SettingsGeneralV2: Component<{
     <div class="settings-v2-section">
       <h3 class="settings-v2-section-title">记忆</h3>
       <SettingsListV2>
-        <SettingsRowV2 title="长期记忆" description="打开独立的记忆库窗口，管理画像、记忆、复习和运维。">
+        <SettingsRowV2 title="长期记忆" description="打开独立的记忆库窗口，管理画像、记忆、整理、记录和运维。">
           <ButtonV2 size="small" onClick={() => dialog.push(() => <MemoryDialog sessionID={props.sessionID} directory={props.directory} />)}>
             打开记忆库
           </ButtonV2>

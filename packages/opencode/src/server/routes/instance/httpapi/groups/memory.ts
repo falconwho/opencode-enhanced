@@ -13,7 +13,7 @@ const root = "/memory"
 // effort here so memory extraction follows the same settings.
 export const MemoryConfigInput = Schema.Struct({
   model: Schema.optional(Schema.String),
-  effort: Schema.optional(Schema.Literals(["low", "medium", "high"])),
+  effort: Schema.optional(Schema.String),
 })
 
 // opencode-enhanced F8: read/clear the Codex v2 memory summary.
@@ -119,6 +119,13 @@ export const MemoryApi = HttpApi.make("memory").add(
         query: MemoryV3Query,
         success: described(Schema.Unknown, "Memory v3 reflection run"),
       }),
+      HttpApiEndpoint.post("v3Distill", `${root}/v3/distill`, {
+        query: MemoryV3Query,
+        payload: Schema.Struct({
+          scope: Schema.optional(Schema.Literals(["user", "project", "shared", "all"])),
+        }),
+        success: described(Schema.Unknown, "Memory v3 distill run"),
+      }),
       HttpApiEndpoint.post("v3ReflectDecide", `${root}/v3/reflect/decide`, {
         query: MemoryV3Query,
         payload: Schema.Struct({
@@ -147,15 +154,6 @@ export const MemoryApi = HttpApi.make("memory").add(
       HttpApiEndpoint.post("v3RebuildEmbeddings", `${root}/v3/rebuild-embeddings`, {
         query: MemoryV3Query,
         success: described(Schema.Unknown, "Memory v3 embedding rebuild"),
-      }),
-      HttpApiEndpoint.get("v3ReviewQueue", `${root}/v3/review`, {
-        query: MemoryV3Query,
-        success: described(Schema.Unknown, "Memory v3 review queue"),
-      }),
-      HttpApiEndpoint.post("v3ReviewGrade", `${root}/v3/review`, {
-        query: MemoryV3Query,
-        payload: Schema.Struct({ id: Schema.String, grade: Schema.Number }),
-        success: described(Schema.Unknown, "Memory v3 review grade"),
       }),
       HttpApiEndpoint.post("v3Mutate", `${root}/v3/mutate`, {
         query: MemoryV3Query,

@@ -14,6 +14,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLayout } from "@/context/layout"
 import { useTabs } from "@/context/tabs"
 import { useServerSync } from "@/context/server-sync"
+import { appRelease } from "@/utils/app-release"
 
 export const DialogSettings: Component<{
   sessionID?: string
@@ -21,6 +22,7 @@ export const DialogSettings: Component<{
 }> = (props) => {
   const language = useLanguage()
   const platform = usePlatform()
+  const release = appRelease(platform.version)
   const dialog = useDialog()
   const layout = useLayout()
   const tabs = useTabs()
@@ -88,8 +90,8 @@ export const DialogSettings: Component<{
               </div>
             </div>
             <div class="settings-v2-nav-footer">
-              <span>{language.t("app.name.desktop")}</span>
-              <span>v{platform.version}</span>
+              <span>{release.name}</span>
+              <span>({release.enhanced})</span>
             </div>
           </div>
         </TabsV2.List>

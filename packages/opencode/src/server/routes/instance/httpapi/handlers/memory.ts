@@ -37,12 +37,13 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
       payload: typeof MemoryConfigInput.Type
     }) {
       yield* svc.configure(ctx.payload)
+      yield* v3.configure(ctx.payload)
       return true
     })
 
     const v3Stats = Effect.fn("MemoryHttpApi.v3Stats")(function* (ctx: { query: { sessionID?: string } }) {
       const id = yield* resolve(ctx.query.sessionID)
-      if (!id) return { total: 0, active: 0, archived: 0, due: 0, byKind: {}, rooms: [] }
+      if (!id) return { total: 0, active: 0, archived: 0, byKind: {}, rooms: [] }
       return safe(yield* v3.stats(id))
     })
 
@@ -110,6 +111,16 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
       return safe(yield* v3.reflect(id))
     })
 
+    const v3Distill = Effect.fn("MemoryHttpApi.v3Distill")(function* (ctx: {
+      query: { sessionID?: string }
+      payload: { scope?: "user" | "project" | "shared" | "all" }
+    }) {
+      const id = yield* resolve(ctx.query.sessionID)
+      if (!id) return { input: 0, distilled: 0, superseded: 0, failed: 0 }
+      if (ctx.payload.scope === "all") return safe(yield* v3.distillAll())
+      return safe(yield* v3.distill(id, ctx.payload.scope ?? "project"))
+    })
+
     const v3ReflectDecide = Effect.fn("MemoryHttpApi.v3ReflectDecide")(function* (ctx: {
       query: { sessionID?: string }
       payload: { id: string; action: "accept" | "reject" }
@@ -151,21 +162,6 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
       const id = yield* resolve(ctx.query.sessionID)
       if (!id) return { updated: 0, failed: 0 }
       return safe(yield* v3.rebuildEmbeddings(id))
-    })
-
-    const v3Review = Effect.fn("MemoryHttpApi.v3Review")(function* (ctx: { query: { sessionID?: string } }) {
-      const id = yield* resolve(ctx.query.sessionID)
-      if (!id) return []
-      return safe(yield* v3.review(id, { action: "queue" }))
-    })
-
-    const v3ReviewGrade = Effect.fn("MemoryHttpApi.v3ReviewGrade")(function* (ctx: {
-      query: { sessionID?: string }
-      payload: { id: string; grade: number }
-    }) {
-      const id = yield* resolve(ctx.query.sessionID)
-      if (!id) return null
-      return safe(yield* v3.review(id, { action: "grade", id: ctx.payload.id, grade: ctx.payload.grade }))
     })
 
     const v3Mutate = Effect.fn("MemoryHttpApi.v3Mutate")(function* (ctx: {
@@ -210,13 +206,12 @@ export const memoryHandlers = HttpApiBuilder.group(InstanceHttpApi, "memory", (h
       .handle("v3Audit", v3Audit)
       .handle("v3Suggestions", v3Suggestions)
       .handle("v3Reflect", v3Reflect)
+      .handle("v3Distill", v3Distill)
       .handle("v3ReflectDecide", v3ReflectDecide)
       .handle("v3Export", v3Export)
       .handle("v3Backup", v3Backup)
       .handle("v3Import", v3Import)
       .handle("v3RebuildEmbeddings", v3RebuildEmbeddings)
-      .handle("v3ReviewQueue", v3Review)
-      .handle("v3ReviewGrade", v3ReviewGrade)
       .handle("v3Mutate", v3Mutate)
       .handle("v3Clear", v3Clear)
       .handle("v3Search", v3Search)

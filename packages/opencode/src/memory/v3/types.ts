@@ -20,13 +20,6 @@ export type Imagery = {
   score?: number
 }
 
-export type ReviewSchedule = {
-  nextReviewAt: number | null
-  easeFactor: number
-  intervalDays: number
-  reps: number
-}
-
 export type MemoryNode = {
   id: string
   scope: MemoryScope
@@ -44,7 +37,6 @@ export type MemoryNode = {
   outcome?: string
   imagery?: Imagery
   slot?: Slot
-  review: ReviewSchedule
 }
 
 export type SaveDisposition = "accept" | "merge" | "defer" | "drop"
@@ -91,7 +83,6 @@ export type MemoryStats = {
   total: number
   active: number
   archived: number
-  due: number
   byKind: Record<string, number>
   rooms: Array<{ room: string; count: number }>
 }

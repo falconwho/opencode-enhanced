@@ -1,6 +1,26 @@
 import { describe, expect, test } from "bun:test"
+import type { ImageAttachmentPart } from "@/context/prompt"
+import { reuseImageAttachments } from "./attachments"
 import { attachmentMime, pickAttachmentFiles } from "./files"
 import { pasteMode } from "./paste"
+
+const image = (id: string, filename: string): ImageAttachmentPart => ({
+  type: "image",
+  id,
+  filename,
+  mime: "image/png",
+  blob: { id, url: `blob:${id}` },
+})
+
+describe("reuseImageAttachments", () => {
+  test("keeps previews mounted by reusing image parts with the same id", () => {
+    const first = image("a", "a.png")
+    const second = image("b", "b.png")
+    const merged = reuseImageAttachments([first, second], [image("a", "a.png"), image("c", "c.png")])
+    expect(merged[0]).toBe(first)
+    expect(merged[1]).not.toBe(second)
+  })
+})
 
 describe("attachmentMime", () => {
   test("keeps PDFs when the browser reports the mime", async () => {

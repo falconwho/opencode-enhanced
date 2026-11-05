@@ -9,7 +9,7 @@ const roots: string[] = []
 async function store() {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "oc-memory-v3-"))
   roots.push(root)
-  return MemoryStore.open(path.join(root, "user.db"), "user", { autoSlot: true, reviewScheduling: true })
+  return MemoryStore.open(path.join(root, "user.db"), "user", { autoSlot: true })
 }
 
 afterEach(() => {
@@ -22,6 +22,8 @@ describe("memory v3 store", () => {
     const first = db.save({ kind: "decision", scope: "user", content: "项目使用 bun 和 TypeScript", placard: "2026-11-02 项目技术栈" })
     expect(first.disposition).toBe("accept")
     expect(first.node?.slot?.room).toBe("decision")
+    expect("review" in first.node!).toBe(false)
+    expect("due" in db.stats()).toBe(false)
     const second = db.save({ kind: "decision", scope: "user", content: "项目使用 bun 和 TypeScript" })
     expect(second.disposition).toBe("merge")
     expect(db.fts(undefined, "项目技术栈", 10).length).toBe(1)
@@ -38,16 +40,6 @@ describe("memory v3 store", () => {
     db.setStatus(first.id, "forgotten")
     const next = db.save({ kind: "fact", scope: "user", content: "new fact after forget" })
     expect(next.node?.slot?.index).toBe(10)
-    db.close()
-  })
-
-  test("returns review queue and advances SM-2", async () => {
-    const db = await store()
-    const saved = db.save({ kind: "skill", scope: "user", content: "review this skill" })
-    const queue = db.reviewQueue(saved.node!.review.nextReviewAt! + 1)
-    expect(queue.length).toBe(1)
-    const schedule = db.gradeReview(saved.node!.id, 5, Date.now())
-    expect(schedule?.intervalDays).toBe(1)
     db.close()
   })
 

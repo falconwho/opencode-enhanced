@@ -151,7 +151,7 @@ const layer = Layer.effect(
           memory_assess: "allow",
           memory_timeline: "allow",
           memory_mutate: "allow",
-          memory_review: "allow",
+          memory_distill: "allow",
           memory_navigate: "allow",
         })
 
