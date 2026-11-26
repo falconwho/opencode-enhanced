@@ -28,7 +28,7 @@ This build rolls up the complete 1.10 through 1.15.5 feature line:
 - **Session state isolation**: new sessions start from build, existing sessions restore their own agent/model/thinking level, and forked sessions inherit the source message state.
 - **AGENTS attention reinforcement**: AGENTS.md reminders are inserted at adaptive intervals and kept out of the visible chat stream.
 - **Conversation workflow**: continuous `@` mentions for multiple files, sessions, and agents; Enter-to-rename for session folders; automatic bottom positioning for normal session entry and the message navigator.
-- **Long user messages**: messages over 10 lines collapse to 10 lines plus a dedicated `...` line, with an expand/collapse control to the left of the bubble.
+- **Long user messages**: messages over 10 lines collapse to 10 lines plus a `... ...` line; the tenth line fades into the bubble background, and a minimalist chevron control to the left expands or collapses the full message.
 - **UI polish**: compact always-visible 3px scrollbars, message dates, unified tool-row spacing, top-right toast placement, reasoning preview follow, and a two-line version badge in Settings.
 - **Stability fixes**: duplicate titlebar actions, memory dialog crashes and HTTP 400 errors, compaction rendering, and the to-do list lifecycle.
 
@@ -80,7 +80,7 @@ Not used to OpenCode's new interface? This project brings the classic UI back! P
 | 🗓️ **Message Dates** | User messages show a local date next to the existing time. |
 | 🖱️ **Unified Scrollbars** | The sidebar, message navigator, reasoning preview, and main conversation share the same compact always-visible scrollbar. |
 | 📎 **Continuous @ Mentions** | You can now @ multiple files, sessions, or agents in one prompt, including after Chinese text or line breaks. |
-| 📏 **Long User Message Collapse** | Messages over 10 lines collapse to 10 lines plus a `...` line; use the expand/collapse control beside the bubble to read the full message. |
+| 📏 **Long User Message Collapse** | Messages over 10 lines collapse to 10 lines plus a `... ...` line; the tenth line fades into the blue bubble background, and a minimalist chevron expands or collapses the message. |
 | 🖼️ **Faster Image Input** | Typing after inserting images no longer rebuilds and re-decodes the image previews on every keystroke. |
 | 🔔 **Top-Right Toasts** | Permission, question, success, and error notifications now appear at the top-right of the conversation instead of covering the input box. |
 | 🏷️ **Version Badge** | The Settings footer shows the OpenCode version and the Enhanced release version on two lines. |

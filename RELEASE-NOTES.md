@@ -7,16 +7,17 @@ A Windows portable build based on the opencode v1.18.35 core.
 ### Long User Message Collapse
 
 - User messages taller than 10 rendered lines now collapse automatically.
-- The collapsed bubble shows 10 lines of text plus a dedicated `...` line.
-- An expand/collapse control is placed to the left of the bubble and top-aligned with it.
-- Collapsed state shows `Expand message` with an up arrow; expanded state shows `Collapse message` with a down arrow.
+- The collapsed bubble shows 10 lines of text plus a dedicated `... ...` line.
+- The tenth line fades into the blue bubble background, so the transition uses the same color as the message bubble.
+- A minimalist chevron control is placed to the left of the bubble and top-aligned with it.
+- Collapsed state shows `Expand message` with an upward chevron; expanded state shows `Collapse message` with a downward chevron.
 - Applies to all user messages, including the latest message.
 
 ### Download
 
 - `opencode-enhanced-win-x64-portable.zip`
-- Size: 334,451,627 bytes
-- SHA256: `3CC9BAB5359D4C06CBB281BC715144352C1E90D3E8F342464599A77EA4907094`
+- Size: 334,450,749 bytes
+- SHA256: `767E9D4432A6115DF45846A955B459E1815D7E4EFB579EF77D9C531E86EDDA53`
 
 ### Notes
 
@@ -106,16 +107,17 @@ A Windows portable build based on the opencode v1.18.35 core. This release conso
 ### 长用户消息折叠
 
 - 用户消息超过 10 个实际渲染行时自动折叠。
-- 折叠后显示 10 行正文，并额外显示一行 `...`。
-- 气泡左侧顶部对齐显示“展开对话/折叠对话”按钮。
-- 折叠时显示“展开对话”和向上箭头；展开后显示“折叠对话”和向下箭头。
+- 折叠后显示 10 行正文，并额外显示一行 `... ...`。
+- 第 10 行文字渐隐到蓝色气泡底色，过渡颜色与用户消息气泡一致。
+- 气泡左侧顶部对齐显示极简折线箭头按钮。
+- 折叠时显示“展开对话”和向上折线箭头；展开后显示“折叠对话”和向下折线箭头。
 - 所有用户消息都适用，包括最新发送的一条。
 
 ### 下载
 
 - `opencode-enhanced-win-x64-portable.zip`
-- 大小：334,451,627 字节
-- SHA256：`3CC9BAB5359D4C06CBB281BC715144352C1E90D3E8F342464599A77EA4907094`
+- 大小：334,450,749 字节
+- SHA256：`767E9D4432A6115DF45846A955B459E1815D7E4EFB579EF77D9C531E86EDDA53`
 
 ### 说明
 

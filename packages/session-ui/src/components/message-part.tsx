@@ -1355,7 +1355,11 @@ export function UserMessageDisplay(props: {
           </Show>
         }
       >
-        <div data-slot="user-message-body" data-expanded={state.expanded ? "true" : undefined}>
+        <div
+          data-slot="user-message-body"
+          data-expanded={state.expanded ? "true" : undefined}
+          data-overflowing={state.overflowing ? "true" : undefined}
+        >
           <Show when={state.overflowing}>
             <button
               type="button"
@@ -1367,7 +1371,7 @@ export function UserMessageDisplay(props: {
                 setState("expanded", !state.expanded)
               }}
             >
-              <Icon name="arrow-up" size="small" />
+              <Icon name="chevron-down" size="small" />
               <span>{i18n.t(state.expanded ? "ui.message.collapse" : "ui.message.expand")}</span>
             </button>
           </Show>
@@ -1385,7 +1389,7 @@ export function UserMessageDisplay(props: {
               <HighlightedText text={text()} references={inlineFiles()} agents={agents()} />
             </div>
             <Show when={state.overflowing && !state.expanded}>
-              <div data-slot="user-message-ellipsis">...</div>
+              <div data-slot="user-message-ellipsis">... ...</div>
             </Show>
             <Show when={messageComments().length > 0}>
               <UserMessageComments comments={messageComments()} bounded />
