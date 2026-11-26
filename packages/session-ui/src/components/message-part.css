@@ -142,8 +142,8 @@
 
   [data-slot="user-message-body"][data-overflowing="true"]:not([data-expanded="true"])
     [data-slot="user-message-text-content"] {
-    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 1.6em), transparent 100%);
-    mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 1.6em), transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 3lh), transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 0%, #000 calc(100% - 3lh), transparent 100%);
   }
 
   [data-slot="user-message-body"][data-expanded="true"] [data-slot="user-message-text-content"] {
@@ -160,7 +160,7 @@
   [data-slot="user-message-expand"] {
     position: absolute;
     inset-inline-end: 100%;
-    top: 0;
+    top: 8px;
     margin-inline-end: 8px;
     display: inline-flex;
     align-items: center;
