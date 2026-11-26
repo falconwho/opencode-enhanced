@@ -65,6 +65,7 @@ import { partDefaultOpen } from "./part-default-open"
 import { animate } from "motion"
 import { attached, inline, kind, typeLabel } from "./message-file"
 import { readPartText } from "./message-part-text"
+import { isOverLineLimit } from "./message-collapse"
 import { formatMessageDate } from "./message-date"
 import { SessionProgressIndicatorV2 } from "../v2/components/session-progress-indicator-v2"
 
@@ -1196,6 +1197,8 @@ export function UserMessageDisplay(props: {
   const [state, setState] = createStore({
     copied: false,
     busy: false,
+    expanded: false,
+    overflowing: false,
   })
   const copied = () => state.copied
   const busy = () => state.busy
@@ -1205,6 +1208,29 @@ export function UserMessageDisplay(props: {
   )
 
   const text = createMemo(() => textPart()?.text || "")
+
+  let textContentRef: HTMLDivElement | undefined
+
+  const measureText = () => {
+    if (!textContentRef) return
+    const style = getComputedStyle(textContentRef)
+    const lineHeight = Number.parseFloat(style.lineHeight) || Number.parseFloat(style.fontSize) * 1.5
+    const overflowing = isOverLineLimit({ scrollHeight: textContentRef.scrollHeight, lineHeight })
+    if (overflowing !== state.overflowing) setState("overflowing", overflowing)
+    if (!overflowing && state.expanded) setState("expanded", false)
+  }
+
+  onMount(() => {
+    const observer = new ResizeObserver(() => measureText())
+    if (textContentRef) observer.observe(textContentRef)
+    requestAnimationFrame(measureText)
+    onCleanup(() => observer.disconnect())
+  })
+
+  createEffect(() => {
+    text()
+    requestAnimationFrame(measureText)
+  })
 
   const files = createMemo(() => (props.parts?.filter((p) => p.type === "file") as FilePart[]) ?? [])
 
@@ -1329,13 +1355,38 @@ export function UserMessageDisplay(props: {
           </Show>
         }
       >
-        <div data-slot="user-message-body">
+        <div data-slot="user-message-body" data-expanded={state.expanded ? "true" : undefined}>
+          <Show when={state.overflowing}>
+            <button
+              type="button"
+              data-slot="user-message-expand"
+              data-expanded={state.expanded ? "true" : undefined}
+              aria-expanded={state.expanded}
+              onClick={(event) => {
+                event.stopPropagation()
+                setState("expanded", !state.expanded)
+              }}
+            >
+              <Icon name="arrow-up" size="small" />
+              <span>{i18n.t(state.expanded ? "ui.message.collapse" : "ui.message.expand")}</span>
+            </button>
+          </Show>
           <div
             data-slot="user-message-text"
             dir="auto"
             data-comments={messageComments().length > 0 ? "true" : undefined}
           >
-            <HighlightedText text={text()} references={inlineFiles()} agents={agents()} />
+            <div
+              data-slot="user-message-text-content"
+              ref={(el) => {
+                textContentRef = el
+              }}
+            >
+              <HighlightedText text={text()} references={inlineFiles()} agents={agents()} />
+            </div>
+            <Show when={state.overflowing && !state.expanded}>
+              <div data-slot="user-message-ellipsis">...</div>
+            </Show>
             <Show when={messageComments().length > 0}>
               <UserMessageComments comments={messageComments()} bounded />
             </Show>

@@ -1,5 +1,31 @@
 # OpenCode Enhanced Release Notes
 
+## opencode Enhanced v1.18.35-enhanced.1.15.5
+
+A Windows portable build based on the opencode v1.18.35 core.
+
+### Long User Message Collapse
+
+- User messages taller than 10 rendered lines now collapse automatically.
+- The collapsed bubble shows 10 lines of text plus a dedicated `...` line.
+- An expand/collapse control is placed to the left of the bubble and top-aligned with it.
+- Collapsed state shows `Expand message` with an up arrow; expanded state shows `Collapse message` with a down arrow.
+- Applies to all user messages, including the latest message.
+
+### Download
+
+- `opencode-enhanced-win-x64-portable.zip`
+- Size: 334,451,627 bytes
+- SHA256: `3CC9BAB5359D4C06CBB281BC715144352C1E90D3E8F342464599A77EA4907094`
+
+### Notes
+
+- Config/data/log paths are fully isolated and do not affect an existing opencode installation.
+- Fully exit any running "opencode Enhanced" process before switching builds.
+- Windows x64, portable only.
+
+---
+
 ## opencode Enhanced v1.18.35-enhanced.1.15.4
 
 A Windows portable build based on the opencode v1.18.35 core. This release consolidates the complete 1.10 through 1.15.4 feature line into one public build.
@@ -72,6 +98,32 @@ A Windows portable build based on the opencode v1.18.35 core. This release conso
 ---
 
 # opencode 增强版发布记录
+
+## opencode 增强版 v1.18.35-enhanced.1.15.5
+
+基于 opencode v1.18.35 内核的 Windows 免安装版本。
+
+### 长用户消息折叠
+
+- 用户消息超过 10 个实际渲染行时自动折叠。
+- 折叠后显示 10 行正文，并额外显示一行 `...`。
+- 气泡左侧顶部对齐显示“展开对话/折叠对话”按钮。
+- 折叠时显示“展开对话”和向上箭头；展开后显示“折叠对话”和向下箭头。
+- 所有用户消息都适用，包括最新发送的一条。
+
+### 下载
+
+- `opencode-enhanced-win-x64-portable.zip`
+- 大小：334,451,627 字节
+- SHA256：`3CC9BAB5359D4C06CBB281BC715144352C1E90D3E8F342464599A77EA4907094`
+
+### 说明
+
+- 配置/数据/日志路径完全隔离，不影响现有 opencode 安装。
+- 切换版本前请完全退出正在运行的 "opencode Enhanced" 进程。
+- 仅 Windows x64，便携版。
+
+---
 
 ## opencode 增强版 v1.18.35-enhanced.1.15.4
 

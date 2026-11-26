@@ -7,19 +7,19 @@
 
 Built on the OpenCode v1.18.35 core, with a set of practical feature upgrades.
 
-This is the harness I use every day. Every feature in it was refined over and over against my own daily workflows, and it has gone through long-term internal use and iteration up to version 1.15.4. I am now open-sourcing this project — I hope you enjoy using it. Give it a ⭐ so you can find it again anytime.
+This is the harness I use every day. Every feature in it was refined over and over against my own daily workflows, and it has gone through long-term internal use and iteration up to version 1.15.5. I am now open-sourcing this project — I hope you enjoy using it. Give it a ⭐ so you can find it again anytime.
 
 ## How to Use
 
-Only the Windows version is released so far, now upgraded to version 1.15.4. To download, see the [Releases page](https://github.com/falconwho/opencode-enhanced/releases). For the full change history, see [RELEASE-NOTES.md](RELEASE-NOTES.md).
+Only the Windows version is released so far, now upgraded to version 1.15.5. To download, see the [Releases page](https://github.com/falconwho/opencode-enhanced/releases). For the full change history, see [RELEASE-NOTES.md](RELEASE-NOTES.md).
 
 - System files and configuration are fully isolated, so your existing OpenCode installation is not affected.
 - Portable edition: unzip the archive and open `opencode Enhanced.exe` inside to start using it.
 - The interface supports multiple languages.
 
-### What's New in 1.15.4
+### What's New in 1.15.5
 
-This build rolls up the complete 1.10 through 1.15.4 feature line:
+This build rolls up the complete 1.10 through 1.15.5 feature line:
 
 - **Memory v3**: local SQLite memory with user, project, and shared scopes; memory palace rooms and slots; hybrid FTS5 plus local-embedding retrieval with keyword fallback; nine model-facing memory tools.
 - **Memory maintenance**: reflection suggestions, independent distillation, multi-query search rewriting, pending ingest replay, rooms, audit records, JSON backup/restore, Markdown export, and embedding rebuild.
@@ -28,6 +28,7 @@ This build rolls up the complete 1.10 through 1.15.4 feature line:
 - **Session state isolation**: new sessions start from build, existing sessions restore their own agent/model/thinking level, and forked sessions inherit the source message state.
 - **AGENTS attention reinforcement**: AGENTS.md reminders are inserted at adaptive intervals and kept out of the visible chat stream.
 - **Conversation workflow**: continuous `@` mentions for multiple files, sessions, and agents; Enter-to-rename for session folders; automatic bottom positioning for normal session entry and the message navigator.
+- **Long user messages**: messages over 10 lines collapse to 10 lines plus a dedicated `...` line, with an expand/collapse control to the left of the bubble.
 - **UI polish**: compact always-visible 3px scrollbars, message dates, unified tool-row spacing, top-right toast placement, reasoning preview follow, and a two-line version badge in Settings.
 - **Stability fixes**: duplicate titlebar actions, memory dialog crashes and HTTP 400 errors, compaction rendering, and the to-do list lifecycle.
 
@@ -79,6 +80,7 @@ Not used to OpenCode's new interface? This project brings the classic UI back! P
 | 🗓️ **Message Dates** | User messages show a local date next to the existing time. |
 | 🖱️ **Unified Scrollbars** | The sidebar, message navigator, reasoning preview, and main conversation share the same compact always-visible scrollbar. |
 | 📎 **Continuous @ Mentions** | You can now @ multiple files, sessions, or agents in one prompt, including after Chinese text or line breaks. |
+| 📏 **Long User Message Collapse** | Messages over 10 lines collapse to 10 lines plus a `...` line; use the expand/collapse control beside the bubble to read the full message. |
 | 🖼️ **Faster Image Input** | Typing after inserting images no longer rebuilds and re-decodes the image previews on every keystroke. |
 | 🔔 **Top-Right Toasts** | Permission, question, success, and error notifications now appear at the top-right of the conversation instead of covering the input box. |
 | 🏷️ **Version Badge** | The Settings footer shows the OpenCode version and the Enhanced release version on two lines. |
@@ -86,3 +88,4 @@ Not used to OpenCode's new interface? This project brings the classic UI back! P
 ## Other
 
 > This is a personal project — it is not developed by, nor affiliated with, the OpenCode team.
+

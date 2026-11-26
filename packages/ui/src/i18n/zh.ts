@@ -181,8 +181,8 @@ export const dict = {
   "ui.permission.allowAlways": "始终允许",
   "ui.permission.allowOnce": "允许一次",
 
-  "ui.message.expand": "展开消息",
-  "ui.message.collapse": "收起消息",
+  "ui.message.expand": "展开对话",
+  "ui.message.collapse": "折叠对话",
   "ui.message.copy": "复制",
   "ui.message.copyMessage": "复制消息",
   "ui.message.forkMessage": "从此消息创建新会话",
